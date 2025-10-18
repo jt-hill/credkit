@@ -44,7 +44,7 @@ total_interest = loan.total_interest()
 # Value the loan at market rate
 market_curve = FlatDiscountCurve(
     InterestRate.from_percent(5.5),
-    valuation_date=date(2024, 1, 1)
+    _valuation_date=date(2024, 1, 1)
 )
 npv = schedule.present_value(market_curve)
 ```
