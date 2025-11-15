@@ -46,6 +46,33 @@ class AmortizationType(Enum):
         return self.value
 
 
+class ReamortizationMethod(Enum):
+    """
+    Methods for re-amortizing a loan after prepayment.
+
+    Defines how the remaining loan balance is re-amortized when a prepayment occurs.
+    """
+
+    KEEP_MATURITY = "Keep Maturity"
+    """
+    Keep the original maturity date, reducing payment amounts.
+    Same number of remaining payments to original maturity.
+    Payment amount decreases due to lower balance.
+    This is standard consumer loan behavior.
+    """
+
+    KEEP_PAYMENT = "Keep Payment"
+    """
+    Keep the original payment amount, moving maturity date earlier.
+    Payment amount stays the same.
+    Number of payments decreases, maturity occurs sooner.
+    Less common but offered by some loan products.
+    """
+
+    def __str__(self) -> str:
+        return self.value
+
+
 def calculate_level_payment(
     principal: Money,
     periodic_rate: Decimal,
@@ -393,3 +420,184 @@ def generate_bullet_schedule(
     )
 
     return CashFlowSchedule(cash_flows=(cash_flow,))
+
+
+def reamortize_loan(
+    remaining_balance: Money,
+    annual_rate: Decimal,
+    payment_frequency: PaymentFrequency,
+    amortization_type: AmortizationType,
+    start_date: date,
+    method: ReamortizationMethod,
+    remaining_payments: int | None = None,
+    target_payment: Money | None = None,
+    calendar: BusinessDayCalendar | None = None,
+) -> CashFlowSchedule:
+    """
+    Generate re-amortized schedule for remaining loan balance after prepayment.
+
+    This function creates a new amortization schedule as if a new loan were originated
+    with the remaining balance. It properly adjusts both principal AND interest payments
+    based on the reduced balance.
+
+    Args:
+        remaining_balance: Outstanding principal balance after prepayment
+        annual_rate: Annual interest rate (as decimal, e.g., 0.06 for 6%)
+        payment_frequency: How often payments are made
+        amortization_type: Type of amortization (LEVEL_PAYMENT, LEVEL_PRINCIPAL, etc.)
+        start_date: Date of first payment in re-amortized schedule
+        method: Re-amortization method (KEEP_MATURITY or KEEP_PAYMENT)
+        remaining_payments: Number of remaining payments (required if method=KEEP_MATURITY)
+        target_payment: Target payment amount (required if method=KEEP_PAYMENT)
+        calendar: Optional business day calendar for date adjustments
+
+    Returns:
+        CashFlowSchedule with re-amortized principal and interest flows
+
+    Raises:
+        ValueError: If parameters are invalid or inconsistent with chosen method
+
+    Example:
+        >>> # After prepayment, re-amortize with same maturity
+        >>> remaining = Money.from_float(80000)
+        >>> schedule = reamortize_loan(
+        ...     remaining_balance=remaining,
+        ...     annual_rate=Decimal("0.06"),
+        ...     payment_frequency=PaymentFrequency.MONTHLY,
+        ...     amortization_type=AmortizationType.LEVEL_PAYMENT,
+        ...     start_date=date(2025, 2, 1),
+        ...     method=ReamortizationMethod.KEEP_MATURITY,
+        ...     remaining_payments=300,  # 25 years remaining
+        ... )
+    """
+    # Validation
+    if not remaining_balance.is_positive():
+        raise ValueError(
+            f"Remaining balance must be positive, got {remaining_balance.amount}"
+        )
+
+    if annual_rate < 0:
+        raise ValueError(f"Annual rate must be non-negative, got {annual_rate}")
+
+    # Method-specific validation
+    if method == ReamortizationMethod.KEEP_MATURITY:
+        if remaining_payments is None:
+            raise ValueError(
+                "remaining_payments required when method=KEEP_MATURITY"
+            )
+        if remaining_payments <= 0:
+            raise ValueError(
+                f"remaining_payments must be positive, got {remaining_payments}"
+            )
+        num_payments = remaining_payments
+
+    elif method == ReamortizationMethod.KEEP_PAYMENT:
+        if target_payment is None:
+            raise ValueError(
+                "target_payment required when method=KEEP_PAYMENT"
+            )
+        if not target_payment.is_positive():
+            raise ValueError(
+                f"target_payment must be positive, got {target_payment.amount}"
+            )
+        if target_payment.currency != remaining_balance.currency:
+            raise ValueError(
+                f"Currency mismatch: target_payment {target_payment.currency} "
+                f"vs remaining_balance {remaining_balance.currency}"
+            )
+
+        # Calculate number of payments needed for target payment
+        # Only applicable for LEVEL_PAYMENT amortization
+        if amortization_type != AmortizationType.LEVEL_PAYMENT:
+            raise ValueError(
+                "KEEP_PAYMENT method only applicable to LEVEL_PAYMENT loans"
+            )
+
+        # Calculate periodic rate
+        periods_per_year = Decimal(str(payment_frequency.payments_per_year))
+        periodic_rate = annual_rate / periods_per_year
+
+        if periodic_rate == 0:
+            # No interest, just divide balance by payment
+            num_payments = int(remaining_balance.amount / target_payment.amount) + 1
+        else:
+            # Solve for n: PMT = P * [r(1+r)^n] / [(1+r)^n - 1]
+            # Rearranged: n = log(PMT / (PMT - P*r)) / log(1+r)
+            from decimal import Decimal as D
+            import math
+
+            pmt = target_payment.amount
+            p = remaining_balance.amount
+            r = periodic_rate
+
+            if pmt <= p * r:
+                raise ValueError(
+                    f"Payment {pmt} too small to cover interest {p * r}. "
+                    f"Loan cannot be amortized with this payment amount."
+                )
+
+            # Use float for logarithm calculation (Decimal doesn't support log)
+            numerator = math.log(float(pmt / (pmt - p * r)))
+            denominator = math.log(float(1 + r))
+            num_payments = int(numerator / denominator) + 1
+
+    else:
+        raise ValueError(f"Unknown re-amortization method: {method}")
+
+    # Calculate periodic rate
+    if payment_frequency.payments_per_year == 0:
+        periodic_rate = Decimal("0")
+    else:
+        periods_per_year = Decimal(str(payment_frequency.payments_per_year))
+        periodic_rate = annual_rate / periods_per_year
+
+    # Generate payment dates
+    payment_dates = generate_payment_dates(
+        start_date,
+        payment_frequency,
+        num_payments,
+        calendar,
+        BusinessDayConvention.MODIFIED_FOLLOWING,
+    )
+
+    # Dispatch to appropriate amortization generator
+    match amortization_type:
+        case AmortizationType.LEVEL_PAYMENT:
+            # Calculate payment amount based on remaining balance
+            if method == ReamortizationMethod.KEEP_PAYMENT:
+                payment_amount = target_payment
+            else:
+                payment_amount = calculate_level_payment(
+                    remaining_balance, periodic_rate, num_payments
+                )
+
+            return generate_level_payment_schedule(
+                remaining_balance,
+                periodic_rate,
+                num_payments,
+                payment_dates,
+                payment_amount,
+            )
+
+        case AmortizationType.LEVEL_PRINCIPAL:
+            return generate_level_principal_schedule(
+                remaining_balance,
+                periodic_rate,
+                num_payments,
+                payment_dates,
+            )
+
+        case AmortizationType.INTEREST_ONLY:
+            return generate_interest_only_schedule(
+                remaining_balance,
+                periodic_rate,
+                num_payments,
+                payment_dates,
+            )
+
+        case AmortizationType.BULLET:
+            # For bullet loans, use the last payment date as maturity
+            return generate_bullet_schedule(
+                remaining_balance,
+                payment_dates[-1] if payment_dates else start_date,
+            )

@@ -122,8 +122,4 @@ Copyright (c) 2025 JT Hill
 Licensed under the GNU Affero General Public License.
 See [LICENSE](LICENSE) for details
 
-For commercial licensing options, contact the author
-
----
-
-148 passing tests covering temporal operations, money arithmetic, cash flow modeling, discount curves, loan instruments, and end-to-end loan valuation.
+For commercial licensing options not covered by AGPL, contact the author

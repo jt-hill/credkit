@@ -8,6 +8,18 @@ Comprehensive examples for all credkit modules and features.
 - [Money Module](#money-module)
 - [Cash Flow Module](#cash-flow-module)
 - [Loan Instruments](#loan-instruments)
+- [Behavioral Modeling](#behavioral-modeling)
+  - [Prepayment Rates](#prepayment-rates)
+  - [Prepayment Curves](#prepayment-curves)
+  - [Default Rates and Curves](#default-rates-and-curves)
+  - [Loss Given Default](#loss-given-default)
+  - [Scenario Analysis: Deterministic Prepayment](#scenario-analysis-deterministic-prepayment)
+  - [Expected Cash Flows: CPR Curves](#expected-cash-flows-cpr-curves)
+  - [PSA Benchmarking](#psa-benchmarking)
+  - [Sensitivity Analysis](#sensitivity-analysis)
+  - [Default Scenarios](#default-scenarios)
+  - [Portfolio Analysis](#portfolio-analysis)
+- [Complete End-to-End Example](#complete-end-to-end-example)
 
 ## Temporal Module
 
@@ -375,6 +387,400 @@ for rate_pct in [5.0, 5.5, 6.0, 6.5, 7.0]:
     )
     pv = schedule.present_value(curve)
     print(f"PV at {rate_pct}%: {pv}")
+```
+
+## Behavioral Modeling
+
+Apply prepayment and default assumptions to loan cash flows.
+
+### Prepayment Rates
+
+Industry-standard CPR (Constant Prepayment Rate) modeling:
+
+```python
+from credkit import PrepaymentRate
+from decimal import Decimal
+
+# Create prepayment rate
+cpr = PrepaymentRate.from_percent(10.0)  # 10% CPR
+print(f"CPR: {cpr.to_percent()}%")
+
+# Convert to monthly rate (SMM)
+smm = cpr.to_smm()
+print(f"SMM: {smm}")  # Single Monthly Mortality
+
+# Scale prepayment rates
+high_prepay = cpr * Decimal("2.0")  # 20% CPR
+low_prepay = cpr * Decimal("0.5")   # 5% CPR
+
+# Compare rates
+if high_prepay > cpr:
+    print("Higher prepayment scenario")
+```
+
+### Prepayment Curves
+
+Time-varying prepayment assumptions:
+
+```python
+from credkit import PrepaymentCurve, PrepaymentRate
+from decimal import Decimal
+
+# Constant CPR for all periods
+constant_curve = PrepaymentCurve.constant_cpr(Decimal("0.10"))  # 10% CPR
+
+# Industry-standard PSA model
+psa_100 = PrepaymentCurve.psa_model(Decimal("100"))  # 100% PSA
+psa_150 = PrepaymentCurve.psa_model(Decimal("150"))  # 150% PSA
+
+# PSA model: ramps from 0.2% CPR (month 1) to 6% CPR (month 30+)
+print(f"Month 1: {psa_100.rate_at_month(1).to_percent()}% CPR")
+print(f"Month 15: {psa_100.rate_at_month(15).to_percent()}% CPR")
+print(f"Month 30: {psa_100.rate_at_month(30).to_percent()}% CPR")
+
+# Custom curve with different speeds over time
+custom_curve = PrepaymentCurve.from_list([
+    (1, PrepaymentRate.from_percent(5.0)),   # Months 1-11: 5% CPR
+    (12, PrepaymentRate.from_percent(10.0)), # Months 12-23: 10% CPR
+    (24, PrepaymentRate.from_percent(8.0)),  # Month 24+: 8% CPR
+])
+
+# Scale curves (e.g., stress testing)
+stressed_curve = psa_100.scale(Decimal("2.0"))  # 200% PSA
+```
+
+### Default Rates and Curves
+
+Model expected default behavior:
+
+```python
+from credkit import DefaultRate, DefaultCurve
+from decimal import Decimal
+
+# Constant default rate
+cdr = DefaultRate.from_percent(2.0)  # 2% CDR
+mdr = cdr.to_mdr()  # Convert to monthly default rate
+
+# Constant default curve
+constant_defaults = DefaultCurve.constant_cdr(Decimal("0.02"))
+
+# Vintage curve (typical pattern: low → peak → decline)
+vintage_curve = DefaultCurve.vintage_curve(
+    peak_month=12,                # Defaults peak at month 12
+    peak_cdr=Decimal("0.03"),     # 3% CDR at peak
+    steady_cdr=Decimal("0.01"),   # 1% CDR long-term
+)
+
+print(f"Month 1: {vintage_curve.rate_at_month(1).to_percent()}% CDR")
+print(f"Month 12: {vintage_curve.rate_at_month(12).to_percent()}% CDR")
+print(f"Month 24: {vintage_curve.rate_at_month(24).to_percent()}% CDR")
+```
+
+### Loss Given Default
+
+Model recovery assumptions:
+
+```python
+from credkit import LossGivenDefault, Period
+from decimal import Decimal
+
+# Severity-based LGD (loss given default)
+lgd = LossGivenDefault.from_percent(40.0)  # 40% severity
+print(f"Severity: {lgd.severity_percent()}%")
+print(f"Recovery rate: {lgd.recovery_rate_percent()}%")
+
+# LGD with recovery lag
+lgd_with_lag = LossGivenDefault.from_percent(
+    severity=40.0,
+    recovery_lag=Period.from_string("12M")  # 12 months to recovery
+)
+
+# Calculate loss and recovery amounts
+from credkit import Money
+defaulted_balance = Money.from_float(100000.0)
+
+loss_amount = lgd.loss_amount(defaulted_balance)
+recovery_amount = lgd.recovery_amount(defaulted_balance)
+
+print(f"Loss: {loss_amount}")      # $40,000
+print(f"Recovery: {recovery_amount}")  # $60,000
+```
+
+### Scenario Analysis: Deterministic Prepayment
+
+Model "what-if" scenarios with specific prepayment events:
+
+```python
+from credkit import Loan, Money, InterestRate, FlatDiscountCurve, CashFlowType
+from datetime import date
+
+# Create loan
+loan = Loan.mortgage(
+    principal=Money.from_float(300000.0),
+    annual_rate=InterestRate.from_percent(6.5),
+    term_years=30,
+    origination_date=date(2024, 1, 1),
+)
+
+# Create discount curve for valuation
+discount_curve = FlatDiscountCurve(
+    InterestRate.from_percent(5.5),
+    valuation_date=date(2024, 1, 1)
+)
+
+# Base case: no prepayment
+base_schedule = loan.generate_schedule()
+base_npv = base_schedule.present_value(discount_curve)
+
+# Scenario: borrower prepays $50,000 at year 5
+prepay_schedule = loan.apply_prepayment(
+    prepayment_date=date(2029, 1, 1),
+    prepayment_amount=Money.from_float(50000.0)
+)
+
+# Schedule now includes:
+# - All original flows up to prepayment date
+# - PREPAYMENT cash flow at prepayment date
+# - Re-amortized principal and interest flows after prepayment
+
+prepay_flows = prepay_schedule.filter_by_type(CashFlowType.PREPAYMENT)
+print(f"Prepayment flows: {len(prepay_flows.cash_flows)}")
+
+# Calculate NPV impact
+prepay_npv = prepay_schedule.present_value(discount_curve)
+npv_impact = prepay_npv - base_npv
+print(f"NPV impact of prepayment: {npv_impact}")
+```
+
+### Expected Cash Flows: CPR Curves
+
+Generate expected cash flows based on portfolio-level statistics:
+
+```python
+from credkit import Loan, PrepaymentCurve, FlatDiscountCurve
+from decimal import Decimal
+from datetime import date
+
+# Create loan
+loan = Loan.mortgage(
+    principal=Money.from_float(300000.0),
+    annual_rate=InterestRate.from_percent(6.5),
+    term_years=30,
+    origination_date=date(2024, 1, 1),
+)
+
+# Industry assumption: 10% CPR constant
+cpr_curve = PrepaymentCurve.constant_cpr(Decimal("0.10"))
+
+# Generate expected cash flows with month-by-month re-amortization
+expected_schedule = loan.expected_cashflows(prepayment_curve=cpr_curve)
+
+# Expected schedule includes:
+# - Scheduled principal and interest (adjusted for prepayments)
+# - PREPAYMENT cash flows each month based on SMM
+# - Proper re-amortization after each prepayment
+
+prepayment_flows = expected_schedule.filter_by_type(CashFlowType.PREPAYMENT)
+total_prepayments = prepayment_flows.total_amount()
+print(f"Total expected prepayments: {total_prepayments}")
+
+# Value expected cash flows
+market_curve = FlatDiscountCurve(
+    InterestRate.from_percent(5.5),
+    valuation_date=date(2024, 1, 1)
+)
+expected_npv = expected_schedule.present_value(market_curve)
+print(f"Expected NPV at 10% CPR: {expected_npv}")
+```
+
+### PSA Benchmarking
+
+Compare loan performance to industry standard:
+
+```python
+from credkit import PrepaymentCurve, FlatDiscountCurve, InterestRate
+from decimal import Decimal
+from datetime import date
+
+# Assume loan and market_curve are already defined from previous example
+# loan = Loan.mortgage(...)
+# market_curve = FlatDiscountCurve(InterestRate.from_percent(5.5), valuation_date=date(2024, 1, 1))
+
+# Create multiple PSA scenarios
+psa_speeds = [50, 100, 150, 200]
+results = []
+
+for speed in psa_speeds:
+    # Generate PSA curve
+    curve = PrepaymentCurve.psa_model(Decimal(str(speed)))
+
+    # Generate expected cash flows
+    expected = loan.expected_cashflows(prepayment_curve=curve)
+
+    # Calculate NPV
+    npv = expected.present_value(market_curve)
+
+    results.append((speed, npv))
+    print(f"{speed}% PSA: NPV = {npv}")
+
+# Analyze sensitivity to prepayment speed
+npv_range = max(r[1] for r in results) - min(r[1] for r in results)
+print(f"NPV range across PSA scenarios: {npv_range}")
+```
+
+### Sensitivity Analysis
+
+Test multiple prepayment assumptions:
+
+```python
+from credkit import Loan, Money, InterestRate, PrepaymentCurve, FlatDiscountCurve
+from decimal import Decimal
+from datetime import date
+
+loan = Loan.mortgage(
+    principal=Money.from_float(300000.0),
+    annual_rate=InterestRate.from_percent(6.5),
+    term_years=30,
+)
+
+discount_curve = FlatDiscountCurve(
+    InterestRate.from_percent(5.5),
+    valuation_date=date(2024, 1, 1)
+)
+
+# Test range of CPR assumptions
+print("CPR Sensitivity Analysis:")
+print("-" * 40)
+
+for cpr_pct in [0, 5, 10, 15, 20, 25]:
+    cpr = Decimal(str(cpr_pct)) / 100
+    curve = PrepaymentCurve.constant_cpr(cpr)
+
+    expected = loan.expected_cashflows(prepayment_curve=curve)
+    npv = expected.present_value(discount_curve)
+
+    print(f"{cpr_pct:2d}% CPR: NPV = {npv}")
+
+# Calculate effective duration (sensitivity to rates)
+base_rate = 5.5
+rate_shock = 0.1  # 10 bps
+
+curve_up = FlatDiscountCurve(
+    InterestRate.from_percent(base_rate + rate_shock),
+    valuation_date=date(2024, 1, 1)
+)
+curve_down = FlatDiscountCurve(
+    InterestRate.from_percent(base_rate - rate_shock),
+    valuation_date=date(2024, 1, 1)
+)
+
+# Use same prepayment assumption
+cpr_curve = PrepaymentCurve.constant_cpr(Decimal("0.10"))
+expected_cf = loan.expected_cashflows(prepayment_curve=cpr_curve)
+
+npv_up = expected_cf.present_value(curve_up)
+npv_down = expected_cf.present_value(curve_down)
+npv_base = expected_cf.present_value(discount_curve)
+
+# Effective duration = (PV_down - PV_up) / (2 * PV_base * rate_change)
+duration = (npv_down - npv_up) / (2 * npv_base * Decimal(str(rate_shock / 100)))
+print(f"\nEffective duration: {duration} years")
+```
+
+### Default Scenarios
+
+Model default events with recovery:
+
+```python
+from credkit import Loan, LossGivenDefault, Period, calculate_outstanding_balance
+from datetime import date, timedelta
+
+# Create loan
+loan = Loan.auto_loan(
+    principal=Money.from_float(30000.0),
+    annual_rate=InterestRate.from_percent(7.5),
+    term_months=60,
+    origination_date=date(2024, 1, 1),
+)
+
+# Generate schedule
+schedule = loan.generate_schedule()
+
+# Model default at month 24
+default_date = date(2026, 1, 1)
+
+# Calculate outstanding balance just before default
+balance_before = calculate_outstanding_balance(
+    schedule,
+    default_date - timedelta(days=1)
+)
+print(f"Outstanding balance at default: {balance_before}")
+
+# Define LGD with recovery lag
+lgd = LossGivenDefault.from_percent(
+    severity=35.0,  # 35% loss on auto loan
+    recovery_lag=Period.from_string("3M")  # 3 months to recover vehicle
+)
+
+# Apply default scenario
+adjusted_schedule, net_loss = loan.apply_default(
+    default_date=default_date,
+    lgd=lgd
+)
+
+print(f"Net loss from default: {net_loss}")
+
+# Schedule now includes recovery flow
+recovery_date = lgd.recovery_lag.add_to_date(default_date)
+recovery_flows = [cf for cf in adjusted_schedule.cash_flows if cf.date == recovery_date]
+if recovery_flows:
+    print(f"Recovery amount: {recovery_flows[0].amount}")
+```
+
+### Portfolio Analysis
+
+Analyze multiple loans with behavioral assumptions:
+
+```python
+from credkit import Loan, Money, InterestRate, PrepaymentCurve, FlatDiscountCurve
+from decimal import Decimal
+from datetime import date
+
+# Create portfolio of loans
+portfolio = [
+    Loan.mortgage(Money.from_float(300000.0), InterestRate.from_percent(6.5), term_years=30),
+    Loan.mortgage(Money.from_float(450000.0), InterestRate.from_percent(6.0), term_years=30),
+    Loan.auto_loan(Money.from_float(35000.0), InterestRate.from_percent(5.5), term_months=60),
+    Loan.personal_loan(Money.from_float(15000.0), InterestRate.from_percent(10.0), term_months=48),
+]
+
+# Apply behavioral assumptions
+prepay_curve = PrepaymentCurve.constant_cpr(Decimal("0.12"))  # 12% CPR
+discount_curve = FlatDiscountCurve(
+    InterestRate.from_percent(5.0),
+    valuation_date=date(2024, 1, 1)
+)
+
+# Calculate portfolio metrics
+total_principal = Money.zero()
+total_npv = Money.zero()
+
+print("Portfolio Analysis:")
+print("-" * 60)
+
+for i, loan in enumerate(portfolio, 1):
+    expected = loan.expected_cashflows(prepayment_curve=prepay_curve)
+    npv = expected.present_value(discount_curve)
+
+    total_principal = total_principal + loan.principal
+    total_npv = total_npv + npv
+
+    print(f"Loan {i}: Principal={loan.principal}, NPV={npv}")
+
+print("-" * 60)
+print(f"Total Principal: {total_principal}")
+print(f"Total NPV: {total_npv}")
+print(f"NPV as % of Principal: {(total_npv / total_principal * 100):.2f}%")
 ```
 
 ## Complete End-to-End Example

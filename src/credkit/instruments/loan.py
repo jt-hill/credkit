@@ -481,6 +481,126 @@ class Loan:
         schedule = self.generate_schedule()
         return schedule.total_amount()
 
+    def apply_prepayment(
+        self,
+        prepayment_date: date,
+        prepayment_amount: Money,
+    ) -> CashFlowSchedule:
+        """
+        Generate schedule with a specific prepayment event and proper re-amortization.
+
+        Creates a modified cash flow schedule including a prepayment at the
+        specified date with the specified amount. Properly re-amortizes the
+        remaining balance, adjusting both principal AND interest flows based
+        on the reduced balance.
+
+        Args:
+            prepayment_date: Date of prepayment event
+            prepayment_amount: Amount of prepayment
+
+        Returns:
+            Cash flow schedule with prepayment and re-amortization applied
+
+        Example:
+            >>> loan = Loan.mortgage(Money.from_float(300000), InterestRate.from_percent(6.5))
+            >>> scenario = loan.apply_prepayment(date(2026, 1, 1), Money.from_float(50000))
+        """
+        from ..behavior.adjustments import apply_prepayment_scenario
+
+        base_schedule = self.generate_schedule()
+        return apply_prepayment_scenario(
+            base_schedule,
+            prepayment_date,
+            prepayment_amount,
+            self.annual_rate.rate,
+            self.payment_frequency,
+            self.amortization_type,
+            calendar=self.calendar,
+        )
+
+    def apply_default(
+        self,
+        default_date: date,
+        lgd: "LossGivenDefault",  # type: ignore
+    ) -> tuple[CashFlowSchedule, Money]:
+        """
+        Generate schedule with a default event.
+
+        Creates a modified cash flow schedule that stops at the default date
+        and includes recovery proceeds based on the LGD model.
+
+        Args:
+            default_date: Date of default event
+            lgd: Loss given default model
+
+        Returns:
+            Tuple of (adjusted schedule, loss amount)
+
+        Example:
+            >>> from credkit.behavior import LossGivenDefault
+            >>> from credkit.temporal import Period, TimeUnit
+            >>> loan = Loan.mortgage(Money.from_float(300000), InterestRate.from_percent(6.5))
+            >>> lgd = LossGivenDefault.from_percent(40.0, Period(12, TimeUnit.MONTHS))
+            >>> scenario, loss = loan.apply_default(date(2026, 1, 1), lgd)
+        """
+        from ..behavior.adjustments import apply_default_scenario, calculate_outstanding_balance
+
+        base_schedule = self.generate_schedule()
+        outstanding = calculate_outstanding_balance(base_schedule, default_date)
+
+        return apply_default_scenario(base_schedule, default_date, outstanding, lgd)
+
+    def expected_cashflows(
+        self,
+        prepayment_curve: "PrepaymentCurve | None" = None,  # type: ignore
+    ) -> CashFlowSchedule:
+        """
+        Generate expected cash flows given behavioral assumptions with proper re-amortization.
+
+        Applies prepayment curve to generate schedule with expected prepayment
+        cash flows. Properly re-amortizes month-by-month, adjusting both principal
+        AND interest based on the evolving balance.
+
+        This provides accurate expected cash flow projections by re-amortizing
+        after each prepayment event.
+
+        Args:
+            prepayment_curve: Prepayment curve to apply (optional)
+
+        Returns:
+            Cash flow schedule with behavioral adjustments and re-amortization
+
+        Example:
+            >>> from credkit.behavior import PrepaymentCurve
+            >>> from decimal import Decimal
+            >>> loan = Loan.mortgage(Money.from_float(300000), InterestRate.from_percent(6.5))
+            >>> cpr_curve = PrepaymentCurve.constant_cpr(Decimal('0.10'))
+            >>> expected = loan.expected_cashflows(prepayment_curve=cpr_curve)
+        """
+        from ..behavior.adjustments import apply_prepayment_curve
+
+        if prepayment_curve is None:
+            # No prepayment curve - return base schedule
+            return self.generate_schedule()
+
+        # Generate expected cash flows with re-amortization
+        first_payment_date = (
+            self.first_payment_date
+            if self.first_payment_date is not None
+            else self.payment_frequency.period.add_to_date(self.origination_date)
+        )
+
+        return apply_prepayment_curve(
+            starting_balance=self.principal,
+            annual_rate=self.annual_rate.rate,
+            payment_frequency=self.payment_frequency,
+            amortization_type=self.amortization_type,
+            start_date=first_payment_date,
+            total_payments=self.calculate_number_of_payments(),
+            curve=prepayment_curve,
+            calendar=self.calendar,
+        )
+
     def __str__(self) -> str:
         return (
             f"Loan({self.principal}, {self.annual_rate.to_percent():.2f}%, "

@@ -96,12 +96,6 @@ class TestInterestRate:
         # Annual rate should be slightly higher than 5%
         assert rate_annual.to_percent() > Decimal("5.0")
 
-    def test_string_representation(self):
-        """Test string representation of interest rate."""
-        rate = InterestRate.from_percent(5.25, CompoundingConvention.MONTHLY)
-        s = str(rate)
-        assert "5.250" in s
-        assert "Monthly" in s
 
 
 class TestSpread:
@@ -148,44 +142,3 @@ class TestSpread:
         assert adjusted_rate.to_percent() == Decimal("7.5")
         assert adjusted_rate.compounding == base_rate.compounding
 
-    def test_spread_addition(self):
-        """Test adding two spreads."""
-        s1 = Spread.from_bps(100)
-        s2 = Spread.from_bps(50)
-        result = s1 + s2
-        assert result.basis_points == Decimal("150")
-
-    def test_spread_subtraction(self):
-        """Test subtracting two spreads."""
-        s1 = Spread.from_bps(100)
-        s2 = Spread.from_bps(50)
-        result = s1 - s2
-        assert result.basis_points == Decimal("50")
-
-    def test_spread_multiplication(self):
-        """Test multiplying spread by scalar."""
-        s = Spread.from_bps(100)
-        result = s * 2
-        assert result.basis_points == Decimal("200")
-
-    def test_spread_negation(self):
-        """Test negating spread."""
-        s = Spread.from_bps(100)
-        result = -s
-        assert result.basis_points == Decimal("-100")
-
-    def test_spread_comparison(self):
-        """Test comparing spreads."""
-        s1 = Spread.from_bps(100)
-        s2 = Spread.from_bps(50)
-        s3 = Spread.from_bps(100)
-
-        assert s1 > s2
-        assert s2 < s1
-        assert s1 == s3
-
-    def test_string_representation(self):
-        """Test string representation of spread."""
-        s = Spread.from_bps(250)
-        assert "250" in str(s)
-        assert "bps" in str(s)

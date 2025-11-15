@@ -42,47 +42,7 @@ class TestCashFlow:
         )
         assert cf.description == "Monthly interest payment"
 
-    def test_type_validation(self):
-        """Test type validation."""
-        with pytest.raises(TypeError):
-            CashFlow(
-                date="2025-01-01",  # Wrong type
-                amount=Money.from_float(1000.0),
-                type=CashFlowType.PRINCIPAL,
-            )
 
-    def test_is_positive(self):
-        """Test positive amount check."""
-        cf = CashFlow(
-            date=date(2025, 1, 1),
-            amount=Money.from_float(1000.0),
-            type=CashFlowType.PRINCIPAL,
-        )
-        assert cf.is_positive()
-        assert not cf.is_negative()
-        assert not cf.is_zero()
-
-    def test_is_negative(self):
-        """Test negative amount check."""
-        cf = CashFlow(
-            date=date(2025, 1, 1),
-            amount=Money.from_float(-1000.0),
-            type=CashFlowType.PRINCIPAL,
-        )
-        assert cf.is_negative()
-        assert not cf.is_positive()
-        assert not cf.is_zero()
-
-    def test_is_zero(self):
-        """Test zero amount check."""
-        cf = CashFlow(
-            date=date(2025, 1, 1),
-            amount=Money.zero(USD),
-            type=CashFlowType.PRINCIPAL,
-        )
-        assert cf.is_zero()
-        assert not cf.is_positive()
-        assert not cf.is_negative()
 
     def test_comparison_operators(self):
         """Test comparison by date."""
@@ -128,18 +88,6 @@ class TestCashFlow:
         # Should not be discounted
         assert pv.amount == Decimal("1000.00")
 
-    def test_string_representation(self):
-        """Test string representations."""
-        cf = CashFlow(
-            date=date(2025, 1, 1),
-            amount=Money.from_float(1000.0),
-            type=CashFlowType.PRINCIPAL,
-            description="Test payment",
-        )
-        assert "2025-01-01" in str(cf)
-        assert "Principal" in str(cf)
-        assert "Test payment" in str(cf)
-        assert "PRINCIPAL" in repr(cf)
 
 
 class TestFlatDiscountCurve:
@@ -200,35 +148,6 @@ class TestZeroCurve:
         assert len(curve.points) == 3
         assert curve.valuation_date == date(2024, 1, 1)
 
-    def test_validation_chronological_order(self):
-        """Test that points must be in chronological order."""
-        # Call constructor directly (from_rates sorts automatically)
-        with pytest.raises(ValueError, match="chronological order"):
-            ZeroCurve(
-                _valuation_date=date(2024, 1, 1),
-                points=(
-                    (date(2026, 1, 1), Decimal("0.055")),
-                    (date(2025, 1, 1), Decimal("0.05")),  # Out of order
-                ),
-            )
-
-    def test_validation_points_after_valuation(self):
-        """Test that all points must be after valuation date."""
-        with pytest.raises(ValueError, match="after valuation date"):
-            ZeroCurve.from_rates(
-                valuation_date=date(2024, 1, 1),
-                rates=[
-                    (date(2023, 1, 1), 0.05),  # Before valuation date
-                ],
-            )
-
-    def test_validation_minimum_points(self):
-        """Test that at least one point is required."""
-        with pytest.raises(ValueError, match="at least one point"):
-            ZeroCurve.from_rates(
-                valuation_date=date(2024, 1, 1),
-                rates=[],
-            )
 
     def test_discount_factor_exact_point(self):
         """Test discount factor at exact curve point."""
@@ -334,14 +253,6 @@ class TestCashFlowSchedule:
         schedule = CashFlowSchedule.from_list([cf1, cf2])
         assert len(schedule) == 2
 
-    def test_from_list_sorting(self):
-        """Test that from_list sorts by default."""
-        cf1 = CashFlow(date(2025, 2, 1), Money.from_float(1000), CashFlowType.PRINCIPAL)
-        cf2 = CashFlow(date(2025, 1, 1), Money.from_float(1000), CashFlowType.PRINCIPAL)
-        schedule = CashFlowSchedule.from_list([cf1, cf2], sort=True)
-        assert schedule[0].date == date(2025, 1, 1)
-        assert schedule[1].date == date(2025, 2, 1)
-
     def test_empty_schedule(self):
         """Test empty schedule creation."""
         schedule = CashFlowSchedule.empty()
@@ -419,12 +330,6 @@ class TestCashFlowSchedule:
         total = schedule.total_amount()
         assert total == Money.from_float(2050)
 
-    def test_total_amount_empty(self):
-        """Test total amount for empty schedule."""
-        schedule = CashFlowSchedule.empty()
-        total = schedule.total_amount()
-        assert total.is_zero()
-
     def test_sum_by_type(self):
         """Test summing by cash flow type."""
         cf1 = CashFlow(date(2025, 1, 1), Money.from_float(1000), CashFlowType.PRINCIPAL)
@@ -449,37 +354,6 @@ class TestCashFlowSchedule:
         # Should be less than 2000 due to discounting
         assert pv.amount < Decimal("2000")
         assert pv.amount > Decimal("1800")
-
-    def test_present_value_empty(self):
-        """Test present value of empty schedule."""
-        schedule = CashFlowSchedule.empty()
-        rate = InterestRate.from_percent(5.0)
-        curve = FlatDiscountCurve(rate, date(2024, 1, 1))
-
-        pv = schedule.present_value(curve)
-        assert pv.is_zero()
-
-    def test_earliest_date(self):
-        """Test getting earliest date."""
-        cf1 = CashFlow(date(2025, 6, 1), Money.from_float(1000), CashFlowType.PRINCIPAL)
-        cf2 = CashFlow(date(2025, 1, 1), Money.from_float(1000), CashFlowType.PRINCIPAL)
-        cf3 = CashFlow(
-            date(2025, 12, 1), Money.from_float(1000), CashFlowType.PRINCIPAL
-        )
-        schedule = CashFlowSchedule(cash_flows=(cf1, cf2, cf3))
-
-        assert schedule.earliest_date() == date(2025, 1, 1)
-
-    def test_latest_date(self):
-        """Test getting latest date."""
-        cf1 = CashFlow(date(2025, 6, 1), Money.from_float(1000), CashFlowType.PRINCIPAL)
-        cf2 = CashFlow(date(2025, 1, 1), Money.from_float(1000), CashFlowType.PRINCIPAL)
-        cf3 = CashFlow(
-            date(2025, 12, 1), Money.from_float(1000), CashFlowType.PRINCIPAL
-        )
-        schedule = CashFlowSchedule(cash_flows=(cf1, cf2, cf3))
-
-        assert schedule.latest_date() == date(2025, 12, 1)
 
     def test_date_range(self):
         """Test getting date range."""

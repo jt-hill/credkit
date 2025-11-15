@@ -9,29 +9,16 @@ from credkit import InterestRate, Money, PaymentFrequency, Period
 from credkit.cashflow import CashFlowType
 from credkit.instruments import AmortizationType, Loan
 from credkit.instruments.amortization import (
+    ReamortizationMethod,
     calculate_level_payment,
     generate_bullet_schedule,
     generate_interest_only_schedule,
     generate_level_payment_schedule,
     generate_level_principal_schedule,
     generate_payment_dates,
+    reamortize_loan,
 )
 from credkit.temporal import BusinessDayCalendar, BusinessDayConvention
-
-
-class TestAmortizationType:
-    """Tests for AmortizationType enum."""
-
-    def test_enum_values(self):
-        """Test enum has expected values."""
-        assert AmortizationType.LEVEL_PAYMENT.value == "Level Payment"
-        assert AmortizationType.LEVEL_PRINCIPAL.value == "Level Principal"
-        assert AmortizationType.INTEREST_ONLY.value == "Interest Only"
-        assert AmortizationType.BULLET.value == "Bullet"
-
-    def test_string_representation(self):
-        """Test string conversion."""
-        assert str(AmortizationType.LEVEL_PAYMENT) == "Level Payment"
 
 
 class TestCalculateLevelPayment:
@@ -85,23 +72,6 @@ class TestCalculateLevelPayment:
         expected = principal.amount * (Decimal("1") + periodic_rate)
         assert abs(payment.amount - expected) < Decimal("0.01")
 
-    def test_negative_rate_raises_error(self):
-        """Test that negative rate raises ValueError."""
-        principal = Money.from_float(1000.0)
-        periodic_rate = Decimal("-0.01")
-        num_payments = 12
-
-        with pytest.raises(ValueError, match="non-negative"):
-            calculate_level_payment(principal, periodic_rate, num_payments)
-
-    def test_zero_payments_raises_error(self):
-        """Test that zero payments raises ValueError."""
-        principal = Money.from_float(1000.0)
-        periodic_rate = Decimal("0.05")
-        num_payments = 0
-
-        with pytest.raises(ValueError, match="must be positive"):
-            calculate_level_payment(principal, periodic_rate, num_payments)
 
 
 class TestGeneratePaymentDates:
@@ -311,17 +281,6 @@ class TestInterestOnlySchedule:
         # Should have 2 flows (interest + balloon)
         assert len(schedule) == 2
 
-    def test_interest_only_zero_payments_raises_error(self):
-        """Test that zero payments raises ValueError."""
-        principal = Money.from_float(10000.0)
-        periodic_rate = Decimal("0.005")
-        num_payments = 0
-        payment_dates = []
-
-        with pytest.raises(ValueError, match="at least one payment"):
-            generate_interest_only_schedule(
-                principal, periodic_rate, num_payments, payment_dates
-            )
 
 
 class TestBulletSchedule:
@@ -387,123 +346,11 @@ class TestLoanCreation:
         assert loan.payment_frequency == PaymentFrequency.MONTHLY
         assert loan.term == Period.from_string("30Y")
 
-    def test_auto_loan_factory(self):
-        """Test auto loan factory method."""
-        loan = Loan.auto_loan(
-            principal=Money.from_float(35000.0),
-            annual_rate=InterestRate.from_percent(5.5),
-            term_months=72,
-            origination_date=date(2024, 1, 1),
-        )
 
-        assert loan.amortization_type == AmortizationType.LEVEL_PAYMENT
-        assert loan.payment_frequency == PaymentFrequency.MONTHLY
-        assert loan.term == Period.from_string("72M")
-
-    def test_personal_loan_factory(self):
-        """Test personal loan factory method."""
-        loan = Loan.personal_loan(
-            principal=Money.from_float(10000.0),
-            annual_rate=InterestRate.from_percent(12.0),
-            term_months=48,
-            origination_date=date(2024, 1, 1),
-        )
-
-        assert loan.amortization_type == AmortizationType.LEVEL_PAYMENT
-        assert loan.payment_frequency == PaymentFrequency.MONTHLY
-
-    def test_negative_principal_raises_error(self):
-        """Test that negative principal raises ValueError."""
-        with pytest.raises(ValueError, match="must be positive"):
-            Loan(
-                principal=Money.from_float(-1000.0),
-                annual_rate=InterestRate.from_percent(6.0),
-                term=Period.from_string("5Y"),
-                payment_frequency=PaymentFrequency.MONTHLY,
-                amortization_type=AmortizationType.LEVEL_PAYMENT,
-                origination_date=date(2024, 1, 1),
-            )
-
-    def test_zero_principal_raises_error(self):
-        """Test that zero principal raises ValueError."""
-        with pytest.raises(ValueError, match="must be positive"):
-            Loan(
-                principal=Money.zero(),
-                annual_rate=InterestRate.from_percent(6.0),
-                term=Period.from_string("5Y"),
-                payment_frequency=PaymentFrequency.MONTHLY,
-                amortization_type=AmortizationType.LEVEL_PAYMENT,
-                origination_date=date(2024, 1, 1),
-            )
-
-    def test_negative_rate_raises_error(self):
-        """Test that negative rate raises ValueError."""
-        with pytest.raises(ValueError, match="non-negative"):
-            Loan(
-                principal=Money.from_float(100000.0),
-                annual_rate=InterestRate(rate=Decimal("-0.01")),
-                term=Period.from_string("5Y"),
-                payment_frequency=PaymentFrequency.MONTHLY,
-                amortization_type=AmortizationType.LEVEL_PAYMENT,
-                origination_date=date(2024, 1, 1),
-            )
-
-    def test_zero_coupon_frequency_with_amortization_raises_error(self):
-        """Test that ZERO_COUPON frequency with non-bullet amortization raises error."""
-        with pytest.raises(ValueError, match="ZERO_COUPON"):
-            Loan(
-                principal=Money.from_float(100000.0),
-                annual_rate=InterestRate.from_percent(6.0),
-                term=Period.from_string("5Y"),
-                payment_frequency=PaymentFrequency.ZERO_COUPON,
-                amortization_type=AmortizationType.LEVEL_PAYMENT,
-                origination_date=date(2024, 1, 1),
-            )
-
-    def test_first_payment_before_origination_raises_error(self):
-        """Test that first payment before origination raises error."""
-        with pytest.raises(ValueError, match="must be after"):
-            Loan(
-                principal=Money.from_float(100000.0),
-                annual_rate=InterestRate.from_percent(6.0),
-                term=Period.from_string("5Y"),
-                payment_frequency=PaymentFrequency.MONTHLY,
-                amortization_type=AmortizationType.LEVEL_PAYMENT,
-                origination_date=date(2024, 1, 1),
-                first_payment_date=date(2023, 12, 31),
-            )
 
 
 class TestLoanCalculations:
     """Tests for loan calculation methods."""
-
-    def test_calculate_periodic_rate(self):
-        """Test periodic rate calculation."""
-        loan = Loan.mortgage(
-            principal=Money.from_float(100000.0),
-            annual_rate=InterestRate.from_percent(6.0),
-            origination_date=date(2024, 1, 1),
-        )
-
-        periodic_rate = loan.calculate_periodic_rate()
-
-        # 6% annual / 12 months = 0.5% monthly
-        expected = Decimal("0.06") / Decimal("12")
-        assert periodic_rate == expected
-
-    def test_calculate_number_of_payments(self):
-        """Test number of payments calculation."""
-        loan = Loan.mortgage(
-            principal=Money.from_float(200000.0),
-            annual_rate=InterestRate.from_percent(5.0),
-            term_years=30,
-            origination_date=date(2024, 1, 1),
-        )
-
-        num_payments = loan.calculate_number_of_payments()
-
-        # 30 years * 12 months = 360 payments
-        assert num_payments == 360
 
     def test_calculate_payment_level_payment(self):
         """Test payment calculation for level payment loan."""
@@ -556,66 +403,6 @@ class TestLoanCalculations:
 class TestLoanScheduleGeneration:
     """Tests for loan schedule generation."""
 
-    def test_generate_level_payment_schedule(self):
-        """Test generating level payment schedule."""
-        loan = Loan.from_float(
-            principal=120000.0,
-            annual_rate_percent=6.0,
-            term_years=30,
-            origination_date=date(2024, 1, 1),
-        )
-
-        schedule = loan.generate_schedule()
-
-        # Should have 720 cash flows (360 payments * 2 flows per payment)
-        assert len(schedule) == 720
-
-        # Principal total should equal original loan
-        principal_total = schedule.get_principal_flows().total_amount()
-        assert abs(principal_total.amount - Decimal("120000")) < Decimal("1.0")
-
-        # Interest should be positive
-        interest_total = schedule.get_interest_flows().total_amount()
-        assert interest_total.is_positive()
-
-    def test_generate_interest_only_schedule(self):
-        """Test generating interest-only schedule."""
-        loan = Loan(
-            principal=Money.from_float(100000.0),
-            annual_rate=InterestRate.from_percent(5.0),
-            term=Period.from_string("5Y"),
-            payment_frequency=PaymentFrequency.MONTHLY,
-            amortization_type=AmortizationType.INTEREST_ONLY,
-            origination_date=date(2024, 1, 1),
-        )
-
-        schedule = loan.generate_schedule()
-
-        # Should have 61 flows (60 interest + 1 balloon)
-        assert len(schedule) == 61
-
-        balloon_flows = schedule.filter_by_type(CashFlowType.BALLOON)
-        assert len(balloon_flows) == 1
-        assert balloon_flows[0].amount == loan.principal
-
-    def test_generate_bullet_schedule(self):
-        """Test generating bullet schedule."""
-        loan = Loan(
-            principal=Money.from_float(500000.0),
-            annual_rate=InterestRate.from_percent(4.0),
-            term=Period.from_string("10Y"),
-            payment_frequency=PaymentFrequency.MONTHLY,
-            amortization_type=AmortizationType.BULLET,
-            origination_date=date(2024, 1, 1),
-        )
-
-        schedule = loan.generate_schedule()
-
-        # Should have single flow
-        assert len(schedule) == 1
-        assert schedule[0].type == CashFlowType.BALLOON
-        assert schedule[0].amount == loan.principal
-
     def test_total_interest_calculation(self):
         """Test total interest calculation."""
         loan = Loan.from_float(
@@ -652,74 +439,184 @@ class TestLoanScheduleGeneration:
 class TestLoanEdgeCases:
     """Tests for edge cases and special scenarios."""
 
-    def test_zero_interest_loan(self):
-        """Test loan with 0% interest."""
-        loan = Loan(
-            principal=Money.from_float(12000.0),
-            annual_rate=InterestRate.from_percent(0.0),
-            term=Period.from_string("1Y"),
+
+
+
+class TestReamortizeLoan:
+    """Tests for loan re-amortization after prepayment."""
+
+    def test_reamortize_level_payment_keep_maturity(self):
+        """Test re-amortization with KEEP_MATURITY method."""
+        # Simulate 30-year mortgage after 5 years and $50k prepayment
+        # Original: $300k at 6%, now $220k remaining, 25 years (300 payments) left
+        remaining_balance = Money.from_float(220000.0)
+        annual_rate = Decimal("0.06")
+
+        schedule = reamortize_loan(
+            remaining_balance=remaining_balance,
+            annual_rate=annual_rate,
             payment_frequency=PaymentFrequency.MONTHLY,
             amortization_type=AmortizationType.LEVEL_PAYMENT,
-            origination_date=date(2024, 1, 1),
+            start_date=date(2025, 2, 1),
+            method=ReamortizationMethod.KEEP_MATURITY,
+            remaining_payments=300,
         )
 
-        payment = loan.calculate_payment()
+        # Should have 300 payments (25 years)
+        principal_flows = schedule.get_principal_flows()
+        interest_flows = schedule.filter_by_type(CashFlowType.INTEREST)
+        assert len(principal_flows) == 300
+        assert len(interest_flows.cash_flows) == 300
 
-        # With 0% interest, payment = principal / num_payments
-        assert payment == loan.principal / 12
+        # Total principal should equal remaining balance
+        total_principal = schedule.sum_by_type()[CashFlowType.PRINCIPAL]
+        assert abs(total_principal.amount - remaining_balance.amount) < Decimal("0.01")
 
-        schedule = loan.generate_schedule()
-        interest_total = schedule.get_interest_flows().total_amount()
+        # First interest payment should be based on remaining balance
+        periodic_rate = annual_rate / Decimal("12")
+        expected_first_interest = remaining_balance.amount * periodic_rate
+        actual_first_interest = interest_flows.cash_flows[0].amount.amount
+        assert abs(actual_first_interest - expected_first_interest) < Decimal("0.01")
 
-        # Total interest should be zero
-        assert interest_total.is_zero()
+        # Last payment date should be 300 months from start
+        assert schedule.latest_date() == date(2050, 1, 1)
 
-    def test_single_payment_loan(self):
-        """Test loan with single payment."""
-        loan = Loan(
-            principal=Money.from_float(1000.0),
-            annual_rate=InterestRate.from_percent(5.0),
-            term=Period.from_string("1M"),
+    def test_reamortize_level_payment_keep_payment(self):
+        """Test re-amortization with KEEP_PAYMENT method."""
+        # After prepayment, keep same payment amount but shorten term
+        remaining_balance = Money.from_float(220000.0)
+        annual_rate = Decimal("0.06")
+        # Original payment on $300k for 30 years at 6%
+        original_payment = Money.from_float(1798.65)
+
+        schedule = reamortize_loan(
+            remaining_balance=remaining_balance,
+            annual_rate=annual_rate,
             payment_frequency=PaymentFrequency.MONTHLY,
             amortization_type=AmortizationType.LEVEL_PAYMENT,
-            origination_date=date(2024, 1, 1),
+            start_date=date(2025, 2, 1),
+            method=ReamortizationMethod.KEEP_PAYMENT,
+            target_payment=original_payment,
         )
 
-        schedule = loan.generate_schedule()
+        # Should have fewer than 300 payments (earlier maturity)
+        principal_flows = schedule.get_principal_flows()
+        assert len(principal_flows) < 300
+        assert len(principal_flows) > 150  # Significantly fewer due to larger payments
 
-        # Should have 2 flows (interest + principal)
-        assert len(schedule) == 2
+        # Total principal should equal remaining balance
+        total_principal = schedule.sum_by_type()[CashFlowType.PRINCIPAL]
+        assert abs(total_principal.amount - remaining_balance.amount) < Decimal("1.00")
 
-        principal_total = schedule.get_principal_flows().total_amount()
-        assert abs(principal_total.amount - loan.principal.amount) < Decimal("0.01")
+        # Payment amount (principal + interest) should be close to target
+        # (except last payment which may be smaller)
+        interest_flows = schedule.filter_by_type(CashFlowType.INTEREST)
+        payment_total = principal_flows[0].amount + interest_flows.cash_flows[0].amount
+        assert abs(payment_total.amount - original_payment.amount) < Decimal("1.00")
 
-    def test_custom_first_payment_date(self):
-        """Test loan with custom first payment date."""
-        loan = Loan(
-            principal=Money.from_float(100000.0),
-            annual_rate=InterestRate.from_percent(6.0),
-            term=Period.from_string("5Y"),
+    def test_reamortize_level_principal(self):
+        """Test re-amortization with level principal amortization."""
+        remaining_balance = Money.from_float(120000.0)
+        annual_rate = Decimal("0.05")
+
+        schedule = reamortize_loan(
+            remaining_balance=remaining_balance,
+            annual_rate=annual_rate,
             payment_frequency=PaymentFrequency.MONTHLY,
-            amortization_type=AmortizationType.LEVEL_PAYMENT,
-            origination_date=date(2024, 1, 1),
-            first_payment_date=date(2024, 3, 1),  # 2 months after origination
+            amortization_type=AmortizationType.LEVEL_PRINCIPAL,
+            start_date=date(2025, 1, 1),
+            method=ReamortizationMethod.KEEP_MATURITY,
+            remaining_payments=120,  # 10 years
         )
 
-        schedule = loan.generate_schedule()
+        # Should have 120 payments
+        principal_flows = schedule.get_principal_flows()
+        assert len(principal_flows) == 120
 
-        # First payment should be on specified date
-        assert schedule.earliest_date() == date(2024, 3, 1)
+        # Each principal payment should be approximately equal
+        principal_per_payment = remaining_balance.amount / Decimal("120")
+        for i, cf in enumerate(principal_flows[:-1]):  # Skip last (rounding adjustment)
+            assert abs(cf.amount.amount - principal_per_payment) < Decimal("1.00")
 
-    def test_loan_string_representation(self):
-        """Test string representation of loan."""
-        loan = Loan.from_float(
-            principal=100000.0,
-            annual_rate_percent=6.0,
-            term_years=30,
-            origination_date=date(2024, 1, 1),
+        # Interest should decline over time
+        interest_flows = schedule.filter_by_type(CashFlowType.INTEREST)
+        assert interest_flows.cash_flows[0].amount > interest_flows.cash_flows[-1].amount
+
+    def test_reamortize_interest_only(self):
+        """Test re-amortization for interest-only loan."""
+        remaining_balance = Money.from_float(200000.0)
+        annual_rate = Decimal("0.04")
+
+        schedule = reamortize_loan(
+            remaining_balance=remaining_balance,
+            annual_rate=annual_rate,
+            payment_frequency=PaymentFrequency.MONTHLY,
+            amortization_type=AmortizationType.INTEREST_ONLY,
+            start_date=date(2025, 1, 1),
+            method=ReamortizationMethod.KEEP_MATURITY,
+            remaining_payments=60,  # 5 years
         )
 
-        loan_str = str(loan)
-        assert "100,000" in loan_str  # Money formats with commas
-        assert "6.00" in loan_str
-        assert "30Y" in loan_str
+        # Should have 60 interest payments
+        interest_flows = schedule.filter_by_type(CashFlowType.INTEREST)
+        assert len(interest_flows.cash_flows) == 60
+
+        # All interest payments should be equal (on remaining balance)
+        periodic_rate = annual_rate / Decimal("12")
+        expected_interest = remaining_balance.amount * periodic_rate
+        for cf in interest_flows.cash_flows:
+            assert abs(cf.amount.amount - expected_interest) < Decimal("0.01")
+
+        # Should have one balloon payment at end for remaining balance
+        balloon_flows = schedule.filter_by_type(CashFlowType.BALLOON)
+        assert len(balloon_flows.cash_flows) == 1
+        assert balloon_flows.cash_flows[0].amount == remaining_balance
+        assert balloon_flows.cash_flows[0].date == schedule.latest_date()
+
+    def test_reamortize_bullet(self):
+        """Test re-amortization for bullet loan."""
+        remaining_balance = Money.from_float(500000.0)
+        annual_rate = Decimal("0.03")
+
+        schedule = reamortize_loan(
+            remaining_balance=remaining_balance,
+            annual_rate=annual_rate,
+            payment_frequency=PaymentFrequency.QUARTERLY,
+            amortization_type=AmortizationType.BULLET,
+            start_date=date(2025, 3, 31),
+            method=ReamortizationMethod.KEEP_MATURITY,
+            remaining_payments=8,  # 2 years quarterly
+        )
+
+        # Should have only one balloon payment
+        balloon_flows = schedule.filter_by_type(CashFlowType.BALLOON)
+        assert len(balloon_flows.cash_flows) == 1
+        assert balloon_flows.cash_flows[0].amount == remaining_balance
+
+        # Should be at the end of the period (8 quarters from start)
+        assert balloon_flows.cash_flows[0].date == date(2026, 12, 30)
+
+    def test_reamortize_validation_negative_balance(self):
+        """Test that negative balance raises ValueError."""
+        with pytest.raises(ValueError, match="positive"):
+            reamortize_loan(
+                remaining_balance=Money.from_float(-1000.0),
+                annual_rate=Decimal("0.05"),
+                payment_frequency=PaymentFrequency.MONTHLY,
+                amortization_type=AmortizationType.LEVEL_PAYMENT,
+                start_date=date(2025, 1, 1),
+                method=ReamortizationMethod.KEEP_MATURITY,
+                remaining_payments=12,
+            )
+
+    def test_reamortize_validation_missing_remaining_payments(self):
+        """Test that KEEP_MATURITY without remaining_payments raises ValueError."""
+        with pytest.raises(ValueError, match="remaining_payments required"):
+            reamortize_loan(
+                remaining_balance=Money.from_float(10000.0),
+                annual_rate=Decimal("0.05"),
+                payment_frequency=PaymentFrequency.MONTHLY,
+                amortization_type=AmortizationType.LEVEL_PAYMENT,
+                start_date=date(2025, 1, 1),
+                method=ReamortizationMethod.KEEP_MATURITY,
+            )

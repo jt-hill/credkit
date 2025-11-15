@@ -9,6 +9,7 @@ Core modules:
 - money: Currency, monetary amounts, and interest rates
 - cashflow: Cash flow modeling and present value calculations
 - instruments: Loan instruments and amortization schedules
+- behavior: Prepayment and default modeling
 """
 
 from .cashflow import (
@@ -32,6 +33,7 @@ from .temporal import (
     DayCountConvention,
     DayCountBasis,
     Period,
+    TimeUnit,
     PaymentFrequency,
     BusinessDayCalendar,
     BusinessDayConvention,
@@ -40,8 +42,19 @@ from .instruments import (
     AmortizationType,
     Loan,
 )
+from .behavior import (
+    PrepaymentRate,
+    PrepaymentCurve,
+    DefaultRate,
+    DefaultCurve,
+    LossGivenDefault,
+    apply_prepayment_scenario,
+    apply_prepayment_curve,
+    apply_default_scenario,
+    calculate_outstanding_balance,
+)
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
     # Money module
@@ -55,6 +68,7 @@ __all__ = [
     "DayCountConvention",
     "DayCountBasis",
     "Period",
+    "TimeUnit",
     "PaymentFrequency",
     "BusinessDayCalendar",
     "BusinessDayConvention",
@@ -69,4 +83,14 @@ __all__ = [
     # Instruments module
     "AmortizationType",
     "Loan",
+    # Behavior module
+    "PrepaymentRate",
+    "PrepaymentCurve",
+    "DefaultRate",
+    "DefaultCurve",
+    "LossGivenDefault",
+    "apply_prepayment_scenario",
+    "apply_prepayment_curve_simple",
+    "apply_default_scenario",
+    "calculate_outstanding_balance",
 ]

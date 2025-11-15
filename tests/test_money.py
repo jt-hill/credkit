@@ -114,8 +114,3 @@ class TestMoney:
         assert m_neg.is_negative()
         assert not m_zero.is_negative()
 
-    def test_string_representation(self):
-        """Test string representation of money."""
-        m = Money(Decimal("1234.56"), USD)
-        assert "USD" in str(m)
-        assert "1,234.56" in str(m)

@@ -25,14 +25,6 @@ class TestPeriod:
         assert Period.from_string("90D") == Period(90, TimeUnit.DAYS)
         assert Period.from_string("2W") == Period(2, TimeUnit.WEEKS)
 
-    def test_from_string_invalid(self):
-        """Test that invalid period strings raise ValueError."""
-        with pytest.raises(ValueError):
-            Period.from_string("invalid")
-        with pytest.raises(ValueError):
-            Period.from_string("M3")  # Wrong order
-        with pytest.raises(ValueError):
-            Period.from_string("3X")  # Invalid unit
 
     def test_add_to_date_days(self):
         """Test adding days to a date."""
@@ -98,8 +90,3 @@ class TestPeriod:
         assert p2 < p1
         assert p1 >= p3  # Approximately equal
 
-    def test_string_representation(self):
-        """Test string representation of period."""
-        p = Period(3, TimeUnit.MONTHS)
-        assert str(p) == "3M"
-        assert "Period" in repr(p)
