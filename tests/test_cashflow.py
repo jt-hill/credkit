@@ -1,7 +1,6 @@
 """Tests for cash flow module."""
 
 from datetime import date
-from decimal import Decimal
 
 import pytest
 
@@ -70,8 +69,8 @@ class TestCashFlow:
         pv = cf.present_value(curve)
         # 1000 / (1.05)^1 ≈ 952.38 with monthly compounding
         # Actually with monthly: 1000 / (1 + 0.05/12)^12 ≈ 951.23
-        assert pv.amount > Decimal("950")
-        assert pv.amount < Decimal("955")
+        assert pv.amount > 950.0
+        assert pv.amount < 955.0
         assert pv.currency == USD
 
     def test_present_value_before_valuation_date(self):
@@ -86,7 +85,7 @@ class TestCashFlow:
 
         pv = cf.present_value(curve)
         # Should not be discounted
-        assert pv.amount == Decimal("1000.00")
+        assert pv.amount == 1000.0
 
 
 
@@ -107,22 +106,22 @@ class TestFlatDiscountCurve:
         df = curve.discount_factor(date(2025, 1, 1))
 
         # With monthly compounding: 1 / (1 + 0.05/12)^12
-        expected = Decimal("1") / (Decimal("1") + Decimal("0.05") / Decimal("12")) ** 12
-        assert abs(df - expected) < Decimal("0.001")
+        expected = 1.0 / (1.0 + 0.05 / 12.0) ** 12
+        assert abs(df - expected) < 0.001
 
     def test_discount_factor_past_date(self):
         """Test discount factor for past date returns 1."""
         rate = InterestRate.from_percent(5.0)
         curve = FlatDiscountCurve(rate, date(2024, 1, 1))
         df = curve.discount_factor(date(2023, 1, 1))
-        assert df == Decimal("1")
+        assert df == 1.0
 
     def test_discount_factor_same_date(self):
         """Test discount factor for same date returns 1."""
         rate = InterestRate.from_percent(5.0)
         curve = FlatDiscountCurve(rate, date(2024, 1, 1))
         df = curve.discount_factor(date(2024, 1, 1))
-        assert df == Decimal("1")
+        assert df == 1.0
 
     def test_spot_rate(self):
         """Test spot rate returns same rate for all maturities."""
@@ -158,8 +157,8 @@ class TestZeroCurve:
         df = curve.discount_factor(date(2025, 1, 1))
         # Should match rate's discount factor for 1 year
         rate = InterestRate.from_percent(5.0)
-        expected = rate.discount_factor(Decimal("1"))
-        assert abs(df - expected) < Decimal("0.001")
+        expected = rate.discount_factor(1.0)
+        assert abs(df - expected) < 0.001
 
     def test_discount_factor_interpolation_linear(self):
         """Test linear interpolation between points."""
@@ -174,8 +173,8 @@ class TestZeroCurve:
         # Mid-point should use linearly interpolated rate (5%)
         df = curve.discount_factor(date(2025, 7, 2))  # Approximately 1.5 years
         # Rate should be around 5% at midpoint
-        assert df > Decimal("0.85")  # Rough bounds
-        assert df < Decimal("0.95")
+        assert df > 0.85  # Rough bounds
+        assert df < 0.95
 
     def test_spot_rate(self):
         """Test spot rate extraction."""
@@ -184,7 +183,7 @@ class TestZeroCurve:
             rates=[(date(2025, 1, 1), 0.05)],
         )
         spot = curve.spot_rate(date(2025, 1, 1))
-        assert abs(spot.rate - Decimal("0.05")) < Decimal("0.0001")
+        assert abs(spot.rate - 0.05) < 0.0001
 
     def test_spot_rate_before_valuation_date(self):
         """Test that spot rate for past date raises error."""
@@ -207,7 +206,7 @@ class TestZeroCurve:
         # Forward rate from year 1 to year 2 should be higher than 6%
         # (since spot increases from 5% to 6%)
         fwd = curve.forward_rate(date(2025, 1, 1), date(2026, 1, 1))
-        assert fwd.rate > Decimal("0.06")
+        assert fwd.rate > 0.06
 
     def test_extrapolation_before_first_point(self):
         """Test flat extrapolation before first point."""
@@ -218,7 +217,7 @@ class TestZeroCurve:
         # Use rate for date between valuation and first point
         df1 = curve.discount_factor(date(2024, 7, 1))
         # Should use first point's rate
-        assert df1 > Decimal("0.97")  # Rough bound for 0.5 year at 5%
+        assert df1 > 0.97  # Rough bound for 0.5 year at 5%
 
     def test_extrapolation_after_last_point(self):
         """Test flat extrapolation after last point."""
@@ -230,8 +229,8 @@ class TestZeroCurve:
         df1 = curve.discount_factor(date(2026, 1, 1))
         # Should use last point's rate for 2 years
         rate = InterestRate.from_percent(5.0)
-        expected = rate.discount_factor(Decimal("2"))
-        assert abs(df1 - expected) < Decimal("0.01")
+        expected = rate.discount_factor(2.0)
+        assert abs(df1 - expected) < 0.01
 
 
 class TestCashFlowSchedule:
@@ -352,8 +351,8 @@ class TestCashFlowSchedule:
 
         pv = schedule.present_value(curve)
         # Should be less than 2000 due to discounting
-        assert pv.amount < Decimal("2000")
-        assert pv.amount > Decimal("1800")
+        assert pv.amount < 2000.0
+        assert pv.amount > 1800.0
 
     def test_date_range(self):
         """Test getting date range."""

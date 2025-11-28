@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from ..cashflow import CashFlowSchedule
@@ -258,7 +257,7 @@ class Loan:
             origination_date=origination_date or date_class.today(),
         )
 
-    def calculate_periodic_rate(self) -> Decimal:
+    def calculate_periodic_rate(self) -> float:
         """
         Calculate the interest rate per payment period.
 
@@ -266,19 +265,19 @@ class Loan:
         the monthly rate (annual_rate / 12).
 
         Returns:
-            Periodic interest rate as Decimal
+            Periodic interest rate as float
 
         Example:
             >>> loan = Loan.mortgage(Money.from_float(300000), InterestRate.from_percent(6.0))
             >>> loan.calculate_periodic_rate()
-            Decimal('0.005')  # 0.5% per month
+            0.005  # 0.5% per month
         """
         if self.payment_frequency.payments_per_year == 0:
-            return Decimal("0")
+            return 0.0
 
         # Convert annual rate to periodic rate based on payment frequency
         # For monthly payments: periodic_rate = annual_rate / 12
-        periods_per_year = Decimal(str(self.payment_frequency.payments_per_year))
+        periods_per_year = float(self.payment_frequency.payments_per_year)
         return self.annual_rate.rate / periods_per_year
 
     def calculate_number_of_payments(self) -> int:
@@ -572,9 +571,8 @@ class Loan:
 
         Example:
             >>> from credkit.behavior import PrepaymentCurve
-            >>> from decimal import Decimal
             >>> loan = Loan.mortgage(Money.from_float(300000), InterestRate.from_percent(6.5))
-            >>> cpr_curve = PrepaymentCurve.constant_cpr(Decimal('0.10'))
+            >>> cpr_curve = PrepaymentCurve.constant_cpr(0.10)
             >>> expected = loan.expected_cashflows(prepayment_curve=cpr_curve)
         """
         from ..behavior.adjustments import apply_prepayment_curve

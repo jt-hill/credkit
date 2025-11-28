@@ -3,7 +3,6 @@
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal
 from typing import Iterator, Self
 
 from ..money import Money

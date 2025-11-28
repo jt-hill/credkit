@@ -1,7 +1,6 @@
 """Spread representations for rate adjustments."""
 
 from dataclasses import dataclass
-from decimal import Decimal
 from typing import Self
 
 from .rate import InterestRate
@@ -16,16 +15,18 @@ class Spread:
     e.g., "Prime + 200 bps" for a variable-rate loan.
     """
 
-    basis_points: Decimal
+    basis_points: float
     """Spread in basis points (1 bp = 0.01%)."""
 
     def __post_init__(self) -> None:
         """Validate spread parameters."""
-        if not isinstance(self.basis_points, Decimal):
-            object.__setattr__(self, "basis_points", Decimal(str(self.basis_points)))
+        if not isinstance(self.basis_points, (int, float)):
+            raise TypeError(f"basis_points must be int or float, got {type(self.basis_points)}")
+        if isinstance(self.basis_points, int):
+            object.__setattr__(self, "basis_points", float(self.basis_points))
 
     @classmethod
-    def from_bps(cls, bps: int | float | Decimal) -> Self:
+    def from_bps(cls, bps: int | float) -> Self:
         """
         Create a Spread from basis points.
 
@@ -38,12 +39,10 @@ class Spread:
         Example:
             >>> Spread.from_bps(250)  # 250 basis points = 2.5%
         """
-        if not isinstance(bps, Decimal):
-            bps = Decimal(str(bps))
-        return cls(basis_points=bps)
+        return cls(basis_points=float(bps))
 
     @classmethod
-    def from_percent(cls, percent: float | Decimal) -> Self:
+    def from_percent(cls, percent: float) -> Self:
         """
         Create a Spread from a percentage.
 
@@ -56,13 +55,11 @@ class Spread:
         Example:
             >>> Spread.from_percent(2.5)  # 2.5% = 250 basis points
         """
-        if isinstance(percent, float):
-            percent = Decimal(str(percent))
-        bps = percent * Decimal("100")
+        bps = percent * 100.0
         return cls(basis_points=bps)
 
     @classmethod
-    def from_decimal(cls, rate: Decimal | float) -> Self:
+    def from_decimal(cls, rate: float) -> Self:
         """
         Create a Spread from a decimal rate.
 
@@ -75,18 +72,16 @@ class Spread:
         Example:
             >>> Spread.from_decimal(0.025)  # 0.025 = 2.5% = 250 bps
         """
-        if isinstance(rate, float):
-            rate = Decimal(str(rate))
-        bps = rate * Decimal("10000")
+        bps = rate * 10000.0
         return cls(basis_points=bps)
 
-    def to_decimal(self) -> Decimal:
+    def to_decimal(self) -> float:
         """Convert spread to decimal rate (e.g., 250 bps -> 0.025)."""
-        return self.basis_points / Decimal("10000")
+        return self.basis_points / 10000.0
 
-    def to_percent(self) -> Decimal:
+    def to_percent(self) -> float:
         """Convert spread to percentage (e.g., 250 bps -> 2.5)."""
-        return self.basis_points / Decimal("100")
+        return self.basis_points / 100.0
 
     def apply_to(self, base_rate: InterestRate) -> InterestRate:
         """
@@ -124,23 +119,19 @@ class Spread:
             return NotImplemented
         return Spread(basis_points=self.basis_points - other.basis_points)
 
-    def __mul__(self, scalar: Decimal | int | float) -> Self:
+    def __mul__(self, scalar: int | float) -> Self:
         """Multiply spread by a scalar."""
-        if isinstance(scalar, (int, float)):
-            scalar = Decimal(str(scalar))
-        if not isinstance(scalar, Decimal):
+        if not isinstance(scalar, (int, float)):
             return NotImplemented
         return Spread(basis_points=self.basis_points * scalar)
 
-    def __rmul__(self, scalar: Decimal | int | float) -> Self:
+    def __rmul__(self, scalar: int | float) -> Self:
         """Right multiply (scalar * spread)."""
         return self.__mul__(scalar)
 
-    def __truediv__(self, scalar: Decimal | int | float) -> Self:
+    def __truediv__(self, scalar: int | float) -> Self:
         """Divide spread by a scalar."""
-        if isinstance(scalar, (int, float)):
-            scalar = Decimal(str(scalar))
-        if not isinstance(scalar, Decimal):
+        if not isinstance(scalar, (int, float)):
             return NotImplemented
         if scalar == 0:
             raise ZeroDivisionError("Cannot divide spread by zero")

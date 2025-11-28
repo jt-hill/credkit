@@ -2,7 +2,6 @@
 
 import pytest
 from datetime import date
-from decimal import Decimal
 
 from credkit import (
     Loan,
@@ -28,38 +27,38 @@ class TestPrepaymentRate:
 
     def test_creation(self):
         """Test creating a prepayment rate."""
-        cpr = PrepaymentRate(annual_rate=Decimal("0.10"))
-        assert cpr.annual_rate == Decimal("0.10")
+        cpr = PrepaymentRate(annual_rate=0.10)
+        assert cpr.annual_rate == 0.10
 
     def test_from_percent(self):
         """Test creating from percentage."""
         cpr = PrepaymentRate.from_percent(10.0)
-        assert cpr.annual_rate == Decimal("0.10")
+        assert cpr.annual_rate == 0.10
 
     def test_to_percent(self):
         """Test conversion to percentage."""
-        cpr = PrepaymentRate(annual_rate=Decimal("0.10"))
-        assert cpr.to_percent() == Decimal("10")
+        cpr = PrepaymentRate(annual_rate=0.10)
+        assert cpr.to_percent() == 10.0
 
     def test_to_smm(self):
         """Test CPR to SMM conversion."""
-        cpr = PrepaymentRate(annual_rate=Decimal("0.10"))
+        cpr = PrepaymentRate(annual_rate=0.10)
         smm = cpr.to_smm()
 
         # SMM should be approximately 0.00874 for 10% CPR
-        assert Decimal("0.008") < smm < Decimal("0.009")
+        assert 0.008 < smm < 0.009
 
         # Zero CPR should give zero SMM
         zero_cpr = PrepaymentRate.zero()
-        assert zero_cpr.to_smm() == Decimal("0")
+        assert zero_cpr.to_smm() == 0.0
 
     def test_from_smm(self):
         """Test creating from SMM."""
-        smm = Decimal("0.00874")
+        smm = 0.00874
         cpr = PrepaymentRate.from_smm(smm)
 
         # Should be approximately 10% CPR
-        assert Decimal("0.09") < cpr.annual_rate < Decimal("0.11")
+        assert 0.09 < cpr.annual_rate < 0.11
 
     def test_smm_roundtrip(self):
         """Test CPR -> SMM -> CPR conversion."""
@@ -68,15 +67,15 @@ class TestPrepaymentRate:
         reconstructed = PrepaymentRate.from_smm(smm)
 
         # Should be very close after roundtrip
-        assert abs(original.annual_rate - reconstructed.annual_rate) < Decimal("0.0001")
+        assert abs(original.annual_rate - reconstructed.annual_rate) < 0.0001
 
 
     def test_multiplication(self):
         """Test scaling prepayment rate."""
         cpr = PrepaymentRate.from_percent(10.0)
-        scaled = cpr * Decimal("0.5")
+        scaled = cpr * 0.5
 
-        assert scaled.to_percent() == Decimal("5")
+        assert scaled.to_percent() == 5
 
     def test_comparison(self):
         """Test comparison operators."""
@@ -96,31 +95,31 @@ class TestPrepaymentCurve:
 
     def test_constant_cpr(self):
         """Test constant CPR curve."""
-        curve = PrepaymentCurve.constant_cpr(Decimal("0.10"))
+        curve = PrepaymentCurve.constant_cpr(0.10)
 
         # Should have same rate for all months
         assert curve.rate_at_month(1) == curve.rate_at_month(360)
-        assert curve.rate_at_month(12).to_percent() == Decimal("10")
+        assert curve.rate_at_month(12).to_percent() == 10
 
     def test_psa_model_100_percent(self):
         """Test 100% PSA model."""
-        psa = PrepaymentCurve.psa_model(Decimal("100"))
+        psa = PrepaymentCurve.psa_model(100)
 
         # Month 1 should be 0.2% CPR
         month1_rate = psa.rate_at_month(1)
-        assert abs(month1_rate.to_percent() - Decimal("0.2")) < Decimal("0.01")
+        assert abs(month1_rate.to_percent() - 0.2) < 0.01
 
         # Month 30+ should be 6% CPR
         month30_rate = psa.rate_at_month(30)
-        assert abs(month30_rate.to_percent() - Decimal("6.0")) < Decimal("0.01")
+        assert abs(month30_rate.to_percent() - 6.0) < 0.01
 
         month60_rate = psa.rate_at_month(60)
-        assert abs(month60_rate.to_percent() - Decimal("6.0")) < Decimal("0.01")
+        assert abs(month60_rate.to_percent() - 6.0) < 0.01
 
 
     def test_psa_model_ramp(self):
         """Test PSA model ramps correctly."""
-        psa = PrepaymentCurve.psa_model(Decimal("100"))
+        psa = PrepaymentCurve.psa_model(100)
 
         # Should increase from month 1 to month 30
         month1 = psa.rate_at_month(1)
@@ -139,9 +138,9 @@ class TestPrepaymentCurve:
 
         curve = PrepaymentCurve.from_list(rates)
 
-        assert curve.rate_at_month(1).to_percent() == Decimal("5")
-        assert curve.rate_at_month(12).to_percent() == Decimal("10")
-        assert curve.rate_at_month(24).to_percent() == Decimal("8")
+        assert curve.rate_at_month(1).to_percent() == 5
+        assert curve.rate_at_month(12).to_percent() == 10
+        assert curve.rate_at_month(24).to_percent() == 8
 
     def test_rate_at_month_step_function(self):
         """Test rate_at_month uses step function."""
@@ -153,10 +152,10 @@ class TestPrepaymentCurve:
         curve = PrepaymentCurve.from_list(rates)
 
         # Month 6 should use month 1's rate (step function)
-        assert curve.rate_at_month(6).to_percent() == Decimal("5")
+        assert curve.rate_at_month(6).to_percent() == 5
 
         # Month 24 should use month 12's rate
-        assert curve.rate_at_month(24).to_percent() == Decimal("10")
+        assert curve.rate_at_month(24).to_percent() == 10
 
     def test_rate_before_first_month(self):
         """Test querying rate before first defined month returns zero."""
@@ -167,19 +166,19 @@ class TestPrepaymentCurve:
         assert curve.rate_at_month(1).is_zero()
 
         # Month 12 should be 10%
-        assert curve.rate_at_month(12).to_percent() == Decimal("10")
+        assert curve.rate_at_month(12).to_percent() == 10
 
 
     def test_scale(self):
         """Test scaling curve."""
-        psa_100 = PrepaymentCurve.psa_model(Decimal("100"))
-        psa_50 = psa_100.scale(Decimal("0.5"))
+        psa_100 = PrepaymentCurve.psa_model(100)
+        psa_50 = psa_100.scale(0.5)
 
         # Should be half the rate
         rate_100 = psa_100.rate_at_month(30)
         rate_50 = psa_50.rate_at_month(30)
 
-        assert abs(rate_50.annual_rate * 2 - rate_100.annual_rate) < Decimal("0.0001")
+        assert abs(rate_50.annual_rate * 2 - rate_100.annual_rate) < 0.0001
 
 
 
@@ -188,13 +187,13 @@ class TestDefaultRate:
 
     def test_creation(self):
         """Test creating a default rate."""
-        cdr = DefaultRate(annual_rate=Decimal("0.02"))
-        assert cdr.annual_rate == Decimal("0.02")
+        cdr = DefaultRate(annual_rate=0.02)
+        assert cdr.annual_rate == 0.02
 
     def test_from_percent(self):
         """Test creating from percentage."""
         cdr = DefaultRate.from_percent(2.0)
-        assert cdr.annual_rate == Decimal("0.02")
+        assert cdr.annual_rate == 0.02
 
 
     def test_to_mdr(self):
@@ -203,15 +202,15 @@ class TestDefaultRate:
         mdr = cdr.to_mdr()
 
         # MDR should be approximately 0.00168 for 2% CDR
-        assert Decimal("0.0015") < mdr < Decimal("0.002")
+        assert 0.0015 < mdr < 0.002
 
     def test_from_mdr(self):
         """Test creating from MDR."""
-        mdr = Decimal("0.00168")
+        mdr = 0.00168
         cdr = DefaultRate.from_mdr(mdr)
 
         # Should be approximately 2% CDR
-        assert Decimal("0.019") < cdr.annual_rate < Decimal("0.021")
+        assert 0.019 < cdr.annual_rate < 0.021
 
 
 
@@ -220,17 +219,17 @@ class TestDefaultCurve:
 
     def test_constant_cdr(self):
         """Test constant CDR curve."""
-        curve = DefaultCurve.constant_cdr(Decimal("0.02"))
+        curve = DefaultCurve.constant_cdr(0.02)
 
         assert curve.rate_at_month(1) == curve.rate_at_month(360)
-        assert curve.rate_at_month(12).to_percent() == Decimal("2")
+        assert curve.rate_at_month(12).to_percent() == 2
 
     def test_vintage_curve(self):
         """Test vintage curve pattern."""
         curve = DefaultCurve.vintage_curve(
             peak_month=12,
-            peak_cdr=Decimal("0.03"),
-            steady_cdr=Decimal("0.01"),
+            peak_cdr=0.03,
+            steady_cdr=0.01,
         )
 
         # Month 1 should be lower than peak
@@ -240,7 +239,7 @@ class TestDefaultCurve:
 
         assert month1 < peak
         assert steady < peak
-        assert steady.to_percent() == Decimal("1")
+        assert steady.to_percent() == 1.0
 
 
 class TestLossGivenDefault:
@@ -249,42 +248,42 @@ class TestLossGivenDefault:
     def test_creation(self):
         """Test creating LGD."""
         lgd = LossGivenDefault(
-            severity=Decimal("0.40"),
+            severity=0.40,
             recovery_lag=Period(12, TimeUnit.MONTHS),
         )
 
-        assert lgd.severity == Decimal("0.40")
+        assert lgd.severity == 0.40
         assert lgd.recovery_lag == Period(12, TimeUnit.MONTHS)
 
     def test_from_percent(self):
         """Test creating from percentage."""
         lgd = LossGivenDefault.from_percent(40.0)
 
-        assert lgd.severity == Decimal("0.40")
-        assert lgd.to_percent() == Decimal("40")
+        assert lgd.severity == 0.40
+        assert lgd.to_percent() == 40
 
     def test_from_recovery_rate(self):
         """Test creating from recovery rate."""
-        lgd = LossGivenDefault.from_recovery_rate(Decimal("0.60"))
+        lgd = LossGivenDefault.from_recovery_rate(0.60)
 
-        assert lgd.severity == Decimal("0.40")
-        assert lgd.recovery_rate() == Decimal("0.60")
+        assert lgd.severity == 0.40
+        assert lgd.recovery_rate() == 0.60
 
     def test_zero_loss(self):
         """Test zero loss LGD."""
         lgd = LossGivenDefault.zero_loss()
 
         assert lgd.is_zero_loss()
-        assert lgd.severity == Decimal("0")
-        assert lgd.recovery_rate() == Decimal("1")
+        assert lgd.severity == 0.0
+        assert lgd.recovery_rate() == 1.0
 
     def test_total_loss(self):
         """Test total loss LGD."""
         lgd = LossGivenDefault.total_loss()
 
         assert lgd.is_total_loss()
-        assert lgd.severity == Decimal("1")
-        assert lgd.recovery_rate() == Decimal("0")
+        assert lgd.severity == 1.0
+        assert lgd.recovery_rate() == 0.0
 
     def test_calculate_loss(self):
         """Test calculating loss amount."""
@@ -307,10 +306,10 @@ class TestLossGivenDefault:
     def test_validation_severity_out_of_range(self):
         """Test validation rejects invalid severity."""
         with pytest.raises(ValueError):
-            LossGivenDefault(severity=Decimal("-0.1"))
+            LossGivenDefault(severity=-0.1)
 
         with pytest.raises(ValueError):
-            LossGivenDefault(severity=Decimal("1.5"))
+            LossGivenDefault(severity=1.5)
 
 
 class TestScheduleAdjustments:
@@ -331,8 +330,9 @@ class TestScheduleAdjustments:
         schedule = simple_loan.generate_schedule()
 
         # At origination, balance should be full principal
+        # Note: Using rounded comparison due to float precision
         balance_start = calculate_outstanding_balance(schedule, date(2024, 12, 31))
-        assert balance_start == Money.from_float(100000)
+        assert balance_start.round() == Money.from_float(100000).round()
 
         # After first payment, balance should be reduced
         balance_after_1 = calculate_outstanding_balance(schedule, date(2025, 2, 1))
@@ -371,7 +371,7 @@ class TestScheduleAdjustments:
     def test_apply_prepayment_curve(self, simple_loan):
         """Test applying prepayment curve with re-amortization."""
         base_schedule = simple_loan.generate_schedule()
-        curve = PrepaymentCurve.constant_cpr(Decimal("0.10"))
+        curve = PrepaymentCurve.constant_cpr(0.10)
 
         first_payment_date = (
             simple_loan.first_payment_date
@@ -395,7 +395,7 @@ class TestScheduleAdjustments:
 
         # Total principal (scheduled + prepayments) should equal original principal
         total_principal_paid = adjusted.get_principal_flows().total_amount()
-        assert abs(total_principal_paid.amount - simple_loan.principal.amount) < Decimal("1.00")
+        assert abs(total_principal_paid.amount - simple_loan.principal.amount) < 1.00
 
     def test_apply_default_scenario(self, simple_loan):
         """Test applying default scenario."""
@@ -407,7 +407,7 @@ class TestScheduleAdjustments:
         adjusted, loss = apply_default_scenario(schedule, default_date, balance, lgd)
 
         # Loss should be 40% of balance
-        expected_loss = balance * Decimal("0.40")
+        expected_loss = balance * 0.40
         assert loss == expected_loss
 
         # Schedule should stop at default date (plus recovery flow)
@@ -465,7 +465,7 @@ class TestLoanBehavioralMethods:
 
     def test_expected_cashflows(self, mortgage):
         """Test expected cash flows with prepayment curve."""
-        curve = PrepaymentCurve.constant_cpr(Decimal("0.10"))
+        curve = PrepaymentCurve.constant_cpr(0.10)
 
         expected = mortgage.expected_cashflows(prepayment_curve=curve)
 
@@ -494,7 +494,7 @@ class TestIntegration:
         )
 
         # Apply prepayment curve
-        cpr_curve = PrepaymentCurve.constant_cpr(Decimal("0.10"))
+        cpr_curve = PrepaymentCurve.constant_cpr(0.10)
         expected_schedule = loan.expected_cashflows(prepayment_curve=cpr_curve)
 
         # Value it
@@ -520,7 +520,7 @@ class TestIntegration:
         )
 
         # Apply 100% PSA
-        psa_curve = PrepaymentCurve.psa_model(Decimal("100"))
+        psa_curve = PrepaymentCurve.psa_model(100)
         expected_schedule = loan.expected_cashflows(prepayment_curve=psa_curve)
 
         # Should have prepayments
@@ -537,4 +537,4 @@ class TestIntegration:
             avg_later = sum(cf.amount.amount for cf in later_prepays) / len(later_prepays)
             # Later prepayments should generally be larger (PSA ramps up)
             # Note: This may not always hold due to declining balance, but is a rough check
-            assert avg_later >= avg_early * Decimal("0.5")  # At least not dramatically smaller
+            assert avg_later >= avg_early * 0.5  # At least not dramatically smaller

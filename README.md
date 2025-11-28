@@ -2,9 +2,13 @@
 
 **An open toolbox for credit modeling in Python**
 
-Credkit provides elegant, type-safe primitives for building credit models that typically force teams to reach for Excel. From consumer loans to portfolio analytics, credkit offers domain-driven tools designed for precision and composability.
+Credkit provides elegant, type-safe primitives for building credit models that
+typically force teams to reach for Excel. From consumer loans to portfolio
+analytics, credkit offers domain-driven tools designed for precision and
+composability.
 
-Built for consumer lending (mortgages, auto loans, personal loans) with cash flow modeling, amortization schedules, and present value calculations.
+Built for consumer lending (mortgages, auto loans, personal loans) with cash
+flow modeling, amortization schedules, and present value calculations.
 
 Currently focused on USD-denominated consumer loan products in the US market.
 
@@ -62,7 +66,7 @@ See [EXAMPLES.md](EXAMPLES.md) for more comprehensive examples of all features.
 
 ### Money (`credkit.money`)
 
-- **Money**: Currency-aware amounts with Decimal precision
+- **Money**: Currency-aware amounts with float64 precision
 - **Interest rates**: APR with multiple compounding conventions
 - **Spreads**: Basis point adjustments (e.g., "Prime + 250 bps")
 
@@ -82,10 +86,28 @@ See [EXAMPLES.md](EXAMPLES.md) for more comprehensive examples of all features.
 ## Features
 
 - **Immutable by default**: All core types are frozen dataclasses
-- **Decimal precision**: No floating-point errors in financial calculations
+- **Float64 precision**: Standard IEEE 754 double precision with appropriate rounding
 - **Type safety**: Full type hints with `py.typed` marker
 - **Composable**: Build complex models from simple primitives
 - **Tested**: 148 passing tests with comprehensive coverage
+
+## Numeric Precision
+
+credkit uses IEEE 754 float64 for all financial calculations, providing:
+
+- **15-17 significant digits** of precision (sufficient for consumer loan
+calculations)
+- **Sub-penny accuracy** for monetary amounts (empirically validated)
+- **No intermediate rounding** - full precision maintained through calculations
+- **Currency-aware final rounding** - Money.round() defaults to 2 decimal
+places for USD
+
+**Rounding Approach:**
+
+- Intermediate calculations use full float64 precision
+- Final results rounded to currency decimal places (e.g., 2 for USD cents)
+- Amortization schedules adjust final payment to exact remaining balance
+- Tests use tolerance-based comparisons (typically 0.01 for money, 0.0001 for rates)
 
 ## Documentation
 

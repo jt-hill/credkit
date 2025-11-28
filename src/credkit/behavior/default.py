@@ -8,7 +8,6 @@ Provides tools for modeling default behavior using industry-standard metrics:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -29,13 +28,13 @@ class DefaultRate:
         CDR of 100% means entire portfolio defaults within the year.
     """
 
-    annual_rate: Decimal
+    annual_rate: float
     """Annual default rate (0.02 = 2% CDR)."""
 
     def __post_init__(self) -> None:
         """Validate default rate."""
-        if not isinstance(self.annual_rate, Decimal):
-            raise TypeError(f"annual_rate must be Decimal, got {type(self.annual_rate)}")
+        if not isinstance(self.annual_rate, (int, float)):
+            raise TypeError(f"annual_rate must be float, got {type(self.annual_rate)}")
 
         if self.annual_rate < 0:
             raise ValueError(f"annual_rate must be non-negative, got {self.annual_rate}")
@@ -46,8 +45,11 @@ class DefaultRate:
                 f"Did you mean {self.annual_rate / 100}?"
             )
 
+        if isinstance(self.annual_rate, int):
+            object.__setattr__(self, "annual_rate", float(self.annual_rate))
+
     @classmethod
-    def from_percent(cls, percent: float | Decimal) -> Self:
+    def from_percent(cls, percent: float) -> Self:
         """
         Create DefaultRate from percentage.
 
@@ -59,22 +61,20 @@ class DefaultRate:
 
         Example:
             >>> DefaultRate.from_percent(2.0)
-            DefaultRate(annual_rate=Decimal('0.02'))
+            DefaultRate(annual_rate=0.02)
         """
-        if isinstance(percent, float):
-            percent = Decimal(str(percent))
-        return cls(annual_rate=percent / 100)
+        return cls(annual_rate=percent / 100.0)
 
     @classmethod
     def zero(cls) -> Self:
         """Create zero default rate (no defaults)."""
-        return cls(annual_rate=Decimal("0"))
+        return cls(annual_rate=0.0)
 
-    def to_percent(self) -> Decimal:
+    def to_percent(self) -> float:
         """Convert to percentage representation."""
-        return self.annual_rate * 100
+        return self.annual_rate * 100.0
 
-    def to_mdr(self) -> Decimal:
+    def to_mdr(self) -> float:
         """
         Convert CDR to MDR (Monthly Default Rate).
 
@@ -82,34 +82,32 @@ class DefaultRate:
         Formula: MDR = 1 - (1 - CDR)^(1/12)
 
         Returns:
-            Monthly default rate as Decimal
+            Monthly default rate as float
 
         Example:
             >>> cdr = DefaultRate.from_percent(2.0)
             >>> cdr.to_mdr()
-            Decimal('0.00168...')  # Approximately 0.168% monthly
+            0.00168...  # Approximately 0.168% monthly
         """
         if self.annual_rate == 0:
-            return Decimal("0")
+            return 0.0
 
         # MDR = 1 - (1 - CDR)^(1/12)
-        # Using precise decimal arithmetic
-        one = Decimal("1")
-        one_twelfth = Decimal("1") / Decimal("12")
+        one_twelfth = 1.0 / 12.0
 
         # (1 - CDR)
-        survival_annual = one - self.annual_rate
+        survival_annual = 1.0 - self.annual_rate
 
         # (1 - CDR)^(1/12)
         survival_monthly = survival_annual ** one_twelfth
 
         # MDR = 1 - survival_monthly
-        mdr = one - survival_monthly
+        mdr = 1.0 - survival_monthly
 
         return mdr
 
     @classmethod
-    def from_mdr(cls, mdr: Decimal) -> Self:
+    def from_mdr(cls, mdr: float) -> Self:
         """
         Create DefaultRate from MDR (Monthly Default Rate).
 
@@ -120,11 +118,11 @@ class DefaultRate:
             DefaultRate instance with equivalent CDR
 
         Example:
-            >>> DefaultRate.from_mdr(Decimal('0.00168'))
-            DefaultRate(annual_rate=Decimal('0.02...'))
+            >>> DefaultRate.from_mdr(0.00168)
+            DefaultRate(annual_rate=0.02...)
         """
-        if not isinstance(mdr, Decimal):
-            raise TypeError(f"mdr must be Decimal, got {type(mdr)}")
+        if not isinstance(mdr, (int, float)):
+            raise TypeError(f"mdr must be float, got {type(mdr)}")
 
         if mdr < 0 or mdr > 1:
             raise ValueError(f"mdr must be between 0 and 1, got {mdr}")
@@ -133,12 +131,9 @@ class DefaultRate:
             return cls.zero()
 
         # CDR = 1 - (1 - MDR)^12
-        one = Decimal("1")
-        twelve = Decimal("12")
-
-        survival_monthly = one - mdr
-        survival_annual = survival_monthly ** twelve
-        cdr = one - survival_annual
+        survival_monthly = 1.0 - mdr
+        survival_annual = survival_monthly ** 12.0
+        cdr = 1.0 - survival_annual
 
         return cls(annual_rate=cdr)
 
@@ -148,14 +143,14 @@ class DefaultRate:
 
     # Arithmetic operations
 
-    def __mul__(self, scalar: Decimal | int | float) -> DefaultRate:
+    def __mul__(self, scalar: int | float) -> DefaultRate:
         """Scale default rate by scalar."""
-        if isinstance(scalar, (int, float)):
-            scalar = Decimal(str(scalar))
+        if not isinstance(scalar, (int, float)):
+            return NotImplemented
 
         return DefaultRate(annual_rate=self.annual_rate * scalar)
 
-    def __rmul__(self, scalar: Decimal | int | float) -> DefaultRate:
+    def __rmul__(self, scalar: int | float) -> DefaultRate:
         """Scale default rate by scalar (reverse)."""
         return self.__mul__(scalar)
 
@@ -247,27 +242,27 @@ class DefaultCurve:
                 raise ValueError("Duplicate months found in curve")
 
     @classmethod
-    def constant_cdr(cls, cdr: Decimal | DefaultRate) -> Self:
+    def constant_cdr(cls, cdr: float | DefaultRate) -> Self:
         """
         Create constant CDR curve (same rate for all periods).
 
         Args:
-            cdr: Either a DefaultRate or Decimal CDR value
+            cdr: Either a DefaultRate or float CDR value
 
         Returns:
             DefaultCurve with constant rate
 
         Example:
-            >>> curve = DefaultCurve.constant_cdr(Decimal('0.02'))
+            >>> curve = DefaultCurve.constant_cdr(0.02)
             >>> curve.rate_at_month(1) == curve.rate_at_month(360)
             True
         """
-        if isinstance(cdr, Decimal):
-            rate = DefaultRate(annual_rate=cdr)
+        if isinstance(cdr, (int, float)):
+            rate = DefaultRate(annual_rate=float(cdr))
         elif isinstance(cdr, DefaultRate):
             rate = cdr
         else:
-            raise TypeError(f"cdr must be Decimal or DefaultRate, got {type(cdr)}")
+            raise TypeError(f"cdr must be float or DefaultRate, got {type(cdr)}")
 
         # Single point at month 1 defines constant rate for all subsequent months
         return cls(rates_by_month=((1, rate),))
@@ -289,8 +284,8 @@ class DefaultCurve:
     def vintage_curve(
         cls,
         peak_month: int = 12,
-        peak_cdr: Decimal = Decimal("0.03"),
-        steady_cdr: Decimal = Decimal("0.01"),
+        peak_cdr: float = 0.03,
+        steady_cdr: float = 0.01,
     ) -> Self:
         """
         Create a vintage curve with early peak defaults.
@@ -316,7 +311,7 @@ class DefaultCurve:
         # Ramp up to peak
         for month in range(1, peak_month + 1):
             # Linear ramp from steady_cdr to peak_cdr
-            progress = Decimal(str(month)) / Decimal(str(peak_month))
+            progress = float(month) / float(peak_month)
             cdr = steady_cdr + (peak_cdr - steady_cdr) * progress
             rates.append((month, DefaultRate(annual_rate=cdr)))
 
@@ -324,7 +319,7 @@ class DefaultCurve:
         decline_months = peak_month
         for month in range(peak_month + 1, peak_month + decline_months + 1):
             # Linear decline from peak_cdr to steady_cdr
-            progress = Decimal(str(month - peak_month)) / Decimal(str(decline_months))
+            progress = float(month - peak_month) / float(decline_months)
             cdr = peak_cdr - (peak_cdr - steady_cdr) * progress
             rates.append((month, DefaultRate(annual_rate=cdr)))
 
@@ -347,9 +342,9 @@ class DefaultCurve:
             DefaultRate for that month
 
         Example:
-            >>> curve = DefaultCurve.constant_cdr(Decimal('0.02'))
+            >>> curve = DefaultCurve.constant_cdr(0.02)
             >>> curve.rate_at_month(12)
-            DefaultRate(annual_rate=Decimal('0.02'))
+            DefaultRate(annual_rate=0.02)
         """
         if month < 1:
             raise ValueError(f"Month must be >= 1, got {month}")
@@ -371,7 +366,7 @@ class DefaultCurve:
 
         return applicable_rate
 
-    def mdr_at_month(self, month: int) -> Decimal:
+    def mdr_at_month(self, month: int) -> float:
         """
         Get MDR (Monthly Default Rate) at specific month.
 
@@ -381,11 +376,11 @@ class DefaultCurve:
             month: Month number (1-indexed)
 
         Returns:
-            Monthly default rate as Decimal
+            Monthly default rate as float
         """
         return self.rate_at_month(month).to_mdr()
 
-    def scale(self, factor: Decimal) -> DefaultCurve:
+    def scale(self, factor: float) -> DefaultCurve:
         """
         Scale all rates in the curve by a factor.
 
@@ -396,8 +391,8 @@ class DefaultCurve:
             New DefaultCurve with scaled rates
 
         Example:
-            >>> base_curve = DefaultCurve.constant_cdr(Decimal('0.02'))
-            >>> half_curve = base_curve.scale(Decimal('0.5'))
+            >>> base_curve = DefaultCurve.constant_cdr(0.02)
+            >>> half_curve = base_curve.scale(0.5)
         """
         scaled_rates = [
             (month, rate * factor)

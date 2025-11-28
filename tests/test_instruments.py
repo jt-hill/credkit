@@ -1,7 +1,6 @@
 """Tests for loan instruments and amortization."""
 
 from datetime import date
-from decimal import Decimal
 
 import pytest
 
@@ -28,49 +27,49 @@ class TestCalculateLevelPayment:
         """Test typical 30-year mortgage payment."""
         principal = Money.from_float(300000.0)
         # 6.5% annual = 0.065/12 = 0.00541667 monthly
-        periodic_rate = Decimal("0.065") / Decimal("12")
+        periodic_rate = 0.065 / 12.0
         num_payments = 360  # 30 years * 12 months
 
         payment = calculate_level_payment(principal, periodic_rate, num_payments)
 
         # Expected: approximately $1896.20
-        assert payment.amount > Decimal("1895")
-        assert payment.amount < Decimal("1897")
+        assert payment.amount > 1895.0
+        assert payment.amount < 1897.0
 
     def test_zero_interest(self):
         """Test loan with zero interest rate."""
         principal = Money.from_float(12000.0)
-        periodic_rate = Decimal("0")
+        periodic_rate = 0.0
         num_payments = 12
 
         payment = calculate_level_payment(principal, periodic_rate, num_payments)
 
         # With 0% interest, payment = principal / num_payments
         assert payment == principal / num_payments
-        assert payment.amount == Decimal("1000")
+        assert payment.amount == 1000.0
 
     def test_short_term_loan(self):
         """Test short-term personal loan."""
         principal = Money.from_float(5000.0)
-        periodic_rate = Decimal("0.10") / Decimal("12")  # 10% APR
+        periodic_rate = 0.10 / 12.0  # 10% APR
         num_payments = 12
 
         payment = calculate_level_payment(principal, periodic_rate, num_payments)
 
         # Payment should be slightly over principal/12 due to interest
-        assert payment.amount > principal.amount / Decimal("12")
+        assert payment.amount > principal.amount / 12.0
 
     def test_single_payment(self):
         """Test loan with single payment."""
         principal = Money.from_float(1000.0)
-        periodic_rate = Decimal("0.05")
+        periodic_rate = 0.05
         num_payments = 1
 
         payment = calculate_level_payment(principal, periodic_rate, num_payments)
 
         # Single payment = principal * (1 + rate)
-        expected = principal.amount * (Decimal("1") + periodic_rate)
-        assert abs(payment.amount - expected) < Decimal("0.01")
+        expected = principal.amount * (1.0 + periodic_rate)
+        assert abs(payment.amount - expected) < 0.01
 
 
 
@@ -140,7 +139,7 @@ class TestLevelPaymentSchedule:
     def test_simple_level_payment_schedule(self):
         """Test generation of simple level payment schedule."""
         principal = Money.from_float(12000.0)
-        periodic_rate = Decimal("0.01")  # 1% per month
+        periodic_rate = 0.01  # 1% per month
         num_payments = 12
         payment_amount = Money.from_float(1065.0)  # Approximate
         payment_dates = [date(2024, i, 1) for i in range(1, 13)]
@@ -157,7 +156,7 @@ class TestLevelPaymentSchedule:
         interest_total = schedule.get_interest_flows().total_amount()
 
         # Principal should equal original loan amount
-        assert abs(principal_total.amount - principal.amount) < Decimal("0.01")
+        assert abs(principal_total.amount - principal.amount) < 0.01
 
         # Interest should be positive
         assert interest_total.is_positive()
@@ -165,7 +164,7 @@ class TestLevelPaymentSchedule:
     def test_first_payment_breakdown(self):
         """Test interest/principal split in first payment."""
         principal = Money.from_float(100000.0)
-        periodic_rate = Decimal("0.005")  # 0.5% per month
+        periodic_rate = 0.005  # 0.5% per month
         num_payments = 360
         payment_amount = calculate_level_payment(principal, periodic_rate, num_payments)
         payment_dates = [date(2024, i, 1) for i in range(1, 13)]  # Generate 12 months
@@ -186,16 +185,16 @@ class TestLevelPaymentSchedule:
 
         # First interest should be balance * rate
         expected_interest = principal.amount * periodic_rate
-        assert abs(first_interest.amount.amount - expected_interest) < Decimal("0.01")
+        assert abs(first_interest.amount.amount - expected_interest) < 0.01
 
         # First principal should be payment - interest
         expected_principal = payment_amount.amount - expected_interest
-        assert abs(first_principal.amount.amount - expected_principal) < Decimal("0.01")
+        assert abs(first_principal.amount.amount - expected_principal) < 0.01
 
     def test_mismatched_dates_raises_error(self):
         """Test that mismatched payment dates raises ValueError."""
         principal = Money.from_float(1000.0)
-        periodic_rate = Decimal("0.01")
+        periodic_rate = 0.01
         num_payments = 12
         payment_amount = Money.from_float(100.0)
         payment_dates = [date(2024, 1, 1)]  # Only 1 date, but 12 payments
@@ -212,7 +211,7 @@ class TestLevelPrincipalSchedule:
     def test_level_principal_schedule(self):
         """Test level principal schedule generation."""
         principal = Money.from_float(12000.0)
-        periodic_rate = Decimal("0.01")
+        periodic_rate = 0.01
         num_payments = 12
         payment_dates = [date(2024, i, 1) for i in range(1, 13)]
 
@@ -225,14 +224,14 @@ class TestLevelPrincipalSchedule:
 
         # Principal total should equal original
         principal_total = schedule.get_principal_flows().total_amount()
-        assert abs(principal_total.amount - principal.amount) < Decimal("0.01")
+        assert abs(principal_total.amount - principal.amount) < 0.01
 
         # Each principal payment should be approximately equal
         principal_flows = schedule.get_principal_flows()
-        expected_principal_per_payment = principal.amount / Decimal(num_payments)
+        expected_principal_per_payment = principal.amount / float(num_payments)
 
         for flow in principal_flows:
-            assert abs(flow.amount.amount - expected_principal_per_payment) < Decimal("0.01")
+            assert abs(flow.amount.amount - expected_principal_per_payment) < 0.01
 
 
 class TestInterestOnlySchedule:
@@ -241,7 +240,7 @@ class TestInterestOnlySchedule:
     def test_interest_only_with_balloon(self):
         """Test interest-only schedule with balloon payment."""
         principal = Money.from_float(200000.0)
-        periodic_rate = Decimal("0.004")  # 0.4% per month
+        periodic_rate = 0.004  # 0.4% per month
         num_payments = 60
         payment_dates = [date(2024 + i // 12, (i % 12) + 1, 1) for i in range(60)]
 
@@ -262,7 +261,7 @@ class TestInterestOnlySchedule:
         # Each interest payment should be the same
         expected_interest = principal.amount * periodic_rate
         for flow in interest_flows:
-            assert abs(flow.amount.amount - expected_interest) < Decimal("0.01")
+            assert abs(flow.amount.amount - expected_interest) < 0.01
 
         # Balloon should equal principal
         assert balloon_flows[0].amount == principal
@@ -270,7 +269,7 @@ class TestInterestOnlySchedule:
     def test_interest_only_single_payment(self):
         """Test interest-only with single payment."""
         principal = Money.from_float(10000.0)
-        periodic_rate = Decimal("0.005")
+        periodic_rate = 0.005
         num_payments = 1
         payment_dates = [date(2024, 12, 31)]
 
@@ -317,8 +316,8 @@ class TestLoanCreation:
             origination_date=date(2024, 1, 1),
         )
 
-        assert loan.principal.amount == Decimal("100000.0")
-        assert loan.annual_rate.to_percent() == Decimal("6.0")
+        assert loan.principal.amount == 100000.0
+        assert loan.annual_rate.to_percent() == 6.0
         assert loan.term == Period.from_string("30Y")
 
     def test_from_float_factory(self):
@@ -330,8 +329,8 @@ class TestLoanCreation:
             origination_date=date(2024, 1, 1),
         )
 
-        assert loan.principal.amount == Decimal("50000.0")
-        assert loan.annual_rate.to_percent() == Decimal("5.5")
+        assert loan.principal.amount == 50000.0
+        assert loan.annual_rate.to_percent() == 5.5
 
     def test_mortgage_factory(self):
         """Test mortgage factory method."""
@@ -364,8 +363,8 @@ class TestLoanCalculations:
         payment = loan.calculate_payment()
 
         # Expected: approximately $599.55
-        assert payment.amount > Decimal("599")
-        assert payment.amount < Decimal("600")
+        assert payment.amount > 599.0
+        assert payment.amount < 600.0
 
     def test_calculate_maturity_date(self):
         """Test maturity date calculation."""
@@ -433,7 +432,7 @@ class TestLoanScheduleGeneration:
 
         # Total payments should equal principal + interest
         expected = loan.principal + total_interest
-        assert abs(total_payments.amount - expected.amount) < Decimal("1.0")
+        assert abs(total_payments.amount - expected.amount) < 1.0
 
 
 class TestLoanEdgeCases:
@@ -450,7 +449,7 @@ class TestReamortizeLoan:
         # Simulate 30-year mortgage after 5 years and $50k prepayment
         # Original: $300k at 6%, now $220k remaining, 25 years (300 payments) left
         remaining_balance = Money.from_float(220000.0)
-        annual_rate = Decimal("0.06")
+        annual_rate = 0.06
 
         schedule = reamortize_loan(
             remaining_balance=remaining_balance,
@@ -470,13 +469,13 @@ class TestReamortizeLoan:
 
         # Total principal should equal remaining balance
         total_principal = schedule.sum_by_type()[CashFlowType.PRINCIPAL]
-        assert abs(total_principal.amount - remaining_balance.amount) < Decimal("0.01")
+        assert abs(total_principal.amount - remaining_balance.amount) < 0.01
 
         # First interest payment should be based on remaining balance
-        periodic_rate = annual_rate / Decimal("12")
+        periodic_rate = annual_rate / 12.0
         expected_first_interest = remaining_balance.amount * periodic_rate
         actual_first_interest = interest_flows.cash_flows[0].amount.amount
-        assert abs(actual_first_interest - expected_first_interest) < Decimal("0.01")
+        assert abs(actual_first_interest - expected_first_interest) < 0.01
 
         # Last payment date should be 300 months from start
         assert schedule.latest_date() == date(2050, 1, 1)
@@ -485,7 +484,7 @@ class TestReamortizeLoan:
         """Test re-amortization with KEEP_PAYMENT method."""
         # After prepayment, keep same payment amount but shorten term
         remaining_balance = Money.from_float(220000.0)
-        annual_rate = Decimal("0.06")
+        annual_rate = 0.06
         # Original payment on $300k for 30 years at 6%
         original_payment = Money.from_float(1798.65)
 
@@ -506,18 +505,18 @@ class TestReamortizeLoan:
 
         # Total principal should equal remaining balance
         total_principal = schedule.sum_by_type()[CashFlowType.PRINCIPAL]
-        assert abs(total_principal.amount - remaining_balance.amount) < Decimal("1.00")
+        assert abs(total_principal.amount - remaining_balance.amount) < 1.00
 
         # Payment amount (principal + interest) should be close to target
         # (except last payment which may be smaller)
         interest_flows = schedule.filter_by_type(CashFlowType.INTEREST)
         payment_total = principal_flows[0].amount + interest_flows.cash_flows[0].amount
-        assert abs(payment_total.amount - original_payment.amount) < Decimal("1.00")
+        assert abs(payment_total.amount - original_payment.amount) < 1.00
 
     def test_reamortize_level_principal(self):
         """Test re-amortization with level principal amortization."""
         remaining_balance = Money.from_float(120000.0)
-        annual_rate = Decimal("0.05")
+        annual_rate = 0.05
 
         schedule = reamortize_loan(
             remaining_balance=remaining_balance,
@@ -534,9 +533,9 @@ class TestReamortizeLoan:
         assert len(principal_flows) == 120
 
         # Each principal payment should be approximately equal
-        principal_per_payment = remaining_balance.amount / Decimal("120")
+        principal_per_payment = remaining_balance.amount / 120.0
         for i, cf in enumerate(principal_flows[:-1]):  # Skip last (rounding adjustment)
-            assert abs(cf.amount.amount - principal_per_payment) < Decimal("1.00")
+            assert abs(cf.amount.amount - principal_per_payment) < 1.00
 
         # Interest should decline over time
         interest_flows = schedule.filter_by_type(CashFlowType.INTEREST)
@@ -545,7 +544,7 @@ class TestReamortizeLoan:
     def test_reamortize_interest_only(self):
         """Test re-amortization for interest-only loan."""
         remaining_balance = Money.from_float(200000.0)
-        annual_rate = Decimal("0.04")
+        annual_rate = 0.04
 
         schedule = reamortize_loan(
             remaining_balance=remaining_balance,
@@ -562,10 +561,10 @@ class TestReamortizeLoan:
         assert len(interest_flows.cash_flows) == 60
 
         # All interest payments should be equal (on remaining balance)
-        periodic_rate = annual_rate / Decimal("12")
+        periodic_rate = annual_rate / 12.0
         expected_interest = remaining_balance.amount * periodic_rate
         for cf in interest_flows.cash_flows:
-            assert abs(cf.amount.amount - expected_interest) < Decimal("0.01")
+            assert abs(cf.amount.amount - expected_interest) < 0.01
 
         # Should have one balloon payment at end for remaining balance
         balloon_flows = schedule.filter_by_type(CashFlowType.BALLOON)
@@ -576,7 +575,7 @@ class TestReamortizeLoan:
     def test_reamortize_bullet(self):
         """Test re-amortization for bullet loan."""
         remaining_balance = Money.from_float(500000.0)
-        annual_rate = Decimal("0.03")
+        annual_rate = 0.03
 
         schedule = reamortize_loan(
             remaining_balance=remaining_balance,
@@ -601,7 +600,7 @@ class TestReamortizeLoan:
         with pytest.raises(ValueError, match="positive"):
             reamortize_loan(
                 remaining_balance=Money.from_float(-1000.0),
-                annual_rate=Decimal("0.05"),
+                annual_rate=0.05,
                 payment_frequency=PaymentFrequency.MONTHLY,
                 amortization_type=AmortizationType.LEVEL_PAYMENT,
                 start_date=date(2025, 1, 1),
@@ -614,7 +613,7 @@ class TestReamortizeLoan:
         with pytest.raises(ValueError, match="remaining_payments required"):
             reamortize_loan(
                 remaining_balance=Money.from_float(10000.0),
-                annual_rate=Decimal("0.05"),
+                annual_rate=0.05,
                 payment_frequency=PaymentFrequency.MONTHLY,
                 amortization_type=AmortizationType.LEVEL_PAYMENT,
                 start_date=date(2025, 1, 1),

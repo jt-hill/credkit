@@ -9,7 +9,6 @@ Provides tools for modeling credit losses and recovery assumptions:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from ..temporal import Period, TimeUnit
@@ -35,7 +34,7 @@ class LossGivenDefault:
         Recovery lag of 12M means proceeds received 12 months after default
     """
 
-    severity: Decimal
+    severity: float
     """
     Loss severity as decimal (0.40 = 40% loss, 60% recovery).
     Must be between 0 (full recovery) and 1 (total loss).
@@ -49,13 +48,16 @@ class LossGivenDefault:
 
     def __post_init__(self) -> None:
         """Validate LGD parameters."""
-        if not isinstance(self.severity, Decimal):
-            raise TypeError(f"severity must be Decimal, got {type(self.severity)}")
+        if not isinstance(self.severity, (int, float)):
+            raise TypeError(f"severity must be float, got {type(self.severity)}")
+
+        if isinstance(self.severity, int):
+            object.__setattr__(self, "severity", float(self.severity))
 
         if self.severity < 0 or self.severity > 1:
             raise ValueError(
                 f"severity must be between 0 and 1, got {self.severity}. "
-                f"For X% severity, use Decimal('0.0X')."
+                f"For X% severity, use 0.0X."
             )
 
         if not isinstance(self.recovery_lag, Period):
@@ -67,7 +69,7 @@ class LossGivenDefault:
     @classmethod
     def from_percent(
         cls,
-        severity_percent: float | Decimal,
+        severity_percent: float,
         recovery_lag: Period | None = None,
     ) -> Self:
         """
@@ -83,14 +85,11 @@ class LossGivenDefault:
         Example:
             >>> lgd = LossGivenDefault.from_percent(40.0)
             >>> lgd.severity
-            Decimal('0.40')
+            0.40
             >>> lgd.recovery_rate()
-            Decimal('0.60')
+            0.60
         """
-        if isinstance(severity_percent, float):
-            severity_percent = Decimal(str(severity_percent))
-
-        severity = severity_percent / 100
+        severity = severity_percent / 100.0
 
         if recovery_lag is None:
             recovery_lag = Period(0, TimeUnit.MONTHS)
@@ -100,7 +99,7 @@ class LossGivenDefault:
     @classmethod
     def from_recovery_rate(
         cls,
-        recovery_rate: Decimal,
+        recovery_rate: float,
         recovery_lag: Period | None = None,
     ) -> Self:
         """
@@ -114,17 +113,17 @@ class LossGivenDefault:
             LossGivenDefault instance
 
         Example:
-            >>> lgd = LossGivenDefault.from_recovery_rate(Decimal('0.60'))
+            >>> lgd = LossGivenDefault.from_recovery_rate(0.60)
             >>> lgd.severity
-            Decimal('0.40')
+            0.40
         """
-        if not isinstance(recovery_rate, Decimal):
-            raise TypeError(f"recovery_rate must be Decimal, got {type(recovery_rate)}")
+        if not isinstance(recovery_rate, (int, float)):
+            raise TypeError(f"recovery_rate must be float, got {type(recovery_rate)}")
 
         if recovery_rate < 0 or recovery_rate > 1:
             raise ValueError(f"recovery_rate must be between 0 and 1, got {recovery_rate}")
 
-        severity = Decimal("1") - recovery_rate
+        severity = 1.0 - recovery_rate
 
         if recovery_lag is None:
             recovery_lag = Period(0, TimeUnit.MONTHS)
@@ -139,7 +138,7 @@ class LossGivenDefault:
         Returns:
             LossGivenDefault with 0% severity
         """
-        return cls(severity=Decimal("0"), recovery_lag=Period(0, TimeUnit.MONTHS))
+        return cls(severity=0.0, recovery_lag=Period(0, TimeUnit.MONTHS))
 
     @classmethod
     def total_loss(cls) -> Self:
@@ -149,23 +148,23 @@ class LossGivenDefault:
         Returns:
             LossGivenDefault with 100% severity
         """
-        return cls(severity=Decimal("1"), recovery_lag=Period(0, TimeUnit.MONTHS))
+        return cls(severity=1.0, recovery_lag=Period(0, TimeUnit.MONTHS))
 
-    def recovery_rate(self) -> Decimal:
+    def recovery_rate(self) -> float:
         """
         Calculate recovery rate (1 - severity).
 
         Returns:
-            Recovery rate as Decimal
+            Recovery rate as float
 
         Example:
             >>> lgd = LossGivenDefault.from_percent(40.0)
             >>> lgd.recovery_rate()
-            Decimal('0.60')
+            0.60
         """
-        return Decimal("1") - self.severity
+        return 1.0 - self.severity
 
-    def to_percent(self) -> Decimal:
+    def to_percent(self) -> float:
         """
         Convert severity to percentage.
 
@@ -173,11 +172,11 @@ class LossGivenDefault:
             Severity as percentage
 
         Example:
-            >>> lgd = LossGivenDefault(severity=Decimal('0.40'))
+            >>> lgd = LossGivenDefault(severity=0.40)
             >>> lgd.to_percent()
-            Decimal('40')
+            40.0
         """
-        return self.severity * 100
+        return self.severity * 100.0
 
     def calculate_loss(self, exposure: Money) -> Money:
         """

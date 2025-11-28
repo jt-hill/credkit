@@ -9,7 +9,6 @@ prepayment and default assumptions. Supports both:
 from __future__ import annotations
 
 from datetime import date
-from decimal import Decimal
 
 from ..cashflow import CashFlow, CashFlowSchedule, CashFlowType
 from ..money import Money
@@ -65,7 +64,7 @@ def apply_prepayment_scenario(
     schedule: CashFlowSchedule,
     prepayment_date: date,
     prepayment_amount: Money,
-    annual_rate: Decimal,
+    annual_rate: float,
     payment_frequency: "PaymentFrequency",  # noqa: F821
     amortization_type: "AmortizationType",  # noqa: F821
     reamortization_method: "ReamortizationMethod | None" = None,  # noqa: F821
@@ -102,7 +101,7 @@ def apply_prepayment_scenario(
         ...     original_schedule,
         ...     date(2025, 6, 1),
         ...     Money.from_float(50000),
-        ...     Decimal("0.06"),
+        ...     0.06,
         ...     PaymentFrequency.MONTHLY,
         ...     AmortizationType.LEVEL_PAYMENT,
         ... )
@@ -180,7 +179,7 @@ def apply_prepayment_scenario(
 
 def apply_prepayment_curve(
     starting_balance: Money,
-    annual_rate: Decimal,
+    annual_rate: float,
     payment_frequency: "PaymentFrequency",  # noqa: F821
     amortization_type: "AmortizationType",  # noqa: F821
     start_date: date,
@@ -214,10 +213,10 @@ def apply_prepayment_curve(
         Cash flow schedule with prepayments and re-amortization
 
     Example:
-        >>> cpr_curve = PrepaymentCurve.constant_cpr(Decimal('0.10'))
+        >>> cpr_curve = PrepaymentCurve.constant_cpr(0.10)
         >>> schedule = apply_prepayment_curve(
         ...     Money.from_float(300000),
-        ...     Decimal("0.06"),
+        ...     0.06,
         ...     PaymentFrequency.MONTHLY,
         ...     AmortizationType.LEVEL_PAYMENT,
         ...     date(2025, 1, 1),
@@ -239,8 +238,8 @@ def apply_prepayment_curve(
     remaining_payments = total_payments
 
     # Calculate periodic rate
-    periods_per_year = Decimal(str(payment_frequency.payments_per_year))
-    periodic_rate = annual_rate / periods_per_year if periods_per_year > 0 else Decimal("0")
+    periods_per_year = float(payment_frequency.payments_per_year)
+    periodic_rate = annual_rate / periods_per_year if periods_per_year > 0 else 0.0
 
     while remaining_payments > 0 and current_balance > Money.zero(starting_balance.currency):
         # Generate payment for this period using re-amortization
@@ -387,7 +386,7 @@ def apply_default_curve_simple(
         Schedule with flows reduced by expected defaults
 
     Example:
-        >>> cdr_curve = DefaultCurve.constant_cdr(Decimal('0.02'))
+        >>> cdr_curve = DefaultCurve.constant_cdr(0.02)
         >>> lgd = LossGivenDefault.from_percent(40.0)
         >>> adjusted = apply_default_curve_simple(schedule, loan.principal, cdr_curve, lgd)
     """

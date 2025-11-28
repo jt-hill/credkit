@@ -1,7 +1,6 @@
 """Money type for representing monetary amounts."""
 
 from dataclasses import dataclass
-from decimal import Decimal, ROUND_HALF_UP
 from typing import Self
 
 from .currency import Currency, USD
@@ -12,21 +11,23 @@ class Money:
     """
     Represents a monetary amount with currency.
 
-    Uses Decimal for precise financial calculations, avoiding floating-point
-    rounding errors that are unacceptable in consumer loan calculations.
+    Uses float64 for financial calculations. Float precision is sufficient
+    for consumer loan calculations (empirically validated to sub-penny accuracy).
 
     All amounts are stored with full precision but can be rounded to
     currency-specific decimal places for display or final calculations.
     """
 
-    amount: Decimal
+    amount: float
     currency: Currency = USD
 
     def __post_init__(self) -> None:
         """Validate money parameters."""
-        if not isinstance(self.amount, Decimal):
-            # Convert to Decimal if not already, but warn via type system
-            object.__setattr__(self, "amount", Decimal(str(self.amount)))
+        if not isinstance(self.amount, (int, float)):
+            raise TypeError(f"amount must be int or float, got {type(self.amount)}")
+        # Convert int to float for consistency
+        if isinstance(self.amount, int):
+            object.__setattr__(self, "amount", float(self.amount))
 
     @classmethod
     def from_float(cls, amount: float, currency: Currency = USD) -> Self:
@@ -41,10 +42,9 @@ class Money:
             Money instance
 
         Note:
-            Converting from float may introduce precision issues. Prefer
-            using Decimal or from_string() for exact amounts.
+            Kept for API compatibility. Direct constructor is now preferred.
         """
-        return cls(amount=Decimal(str(amount)), currency=currency)
+        return cls(amount=amount, currency=currency)
 
     @classmethod
     def from_string(cls, amount: str, currency: Currency = USD) -> Self:
@@ -61,12 +61,12 @@ class Money:
         Raises:
             ValueError: If string cannot be parsed as a number
         """
-        return cls(amount=Decimal(amount), currency=currency)
+        return cls(amount=float(amount), currency=currency)
 
     @classmethod
     def zero(cls, currency: Currency = USD) -> Self:
         """Create a zero money amount."""
-        return cls(amount=Decimal("0"), currency=currency)
+        return cls(amount=0.0, currency=currency)
 
     def round(self, decimal_places: int | None = None) -> Self:
         """
@@ -79,8 +79,7 @@ class Money:
             New Money instance with rounded amount
         """
         places = decimal_places if decimal_places is not None else self.currency.decimal_places
-        quantizer = Decimal("0.1") ** places
-        rounded = self.amount.quantize(quantizer, rounding=ROUND_HALF_UP)
+        rounded = round(self.amount, places)
         return Money(amount=rounded, currency=self.currency)
 
     # Arithmetic operations
@@ -105,23 +104,19 @@ class Money:
             )
         return Money(amount=self.amount - other.amount, currency=self.currency)
 
-    def __mul__(self, scalar: Decimal | int | float) -> Self:
+    def __mul__(self, scalar: int | float) -> Self:
         """Multiply money by a scalar."""
-        if isinstance(scalar, (int, float)):
-            scalar = Decimal(str(scalar))
-        if not isinstance(scalar, Decimal):
+        if not isinstance(scalar, (int, float)):
             return NotImplemented
         return Money(amount=self.amount * scalar, currency=self.currency)
 
-    def __rmul__(self, scalar: Decimal | int | float) -> Self:
+    def __rmul__(self, scalar: int | float) -> Self:
         """Right multiply (scalar * money)."""
         return self.__mul__(scalar)
 
-    def __truediv__(self, scalar: Decimal | int | float) -> Self:
+    def __truediv__(self, scalar: int | float) -> Self:
         """Divide money by a scalar."""
-        if isinstance(scalar, (int, float)):
-            scalar = Decimal(str(scalar))
-        if not isinstance(scalar, Decimal):
+        if not isinstance(scalar, (int, float)):
             return NotImplemented
         if scalar == 0:
             raise ZeroDivisionError("Cannot divide money by zero")

@@ -80,7 +80,7 @@ biz_days = calendar.business_days_between(start, end)
 
 ## Money Module
 
-Financial primitives with Decimal precision.
+Financial primitives with float64 precision.
 
 ### Money
 
@@ -88,9 +88,8 @@ Currency-aware monetary amounts:
 
 ```python
 from credkit import Money, USD
-from decimal import Decimal
 
-principal = Money(Decimal("100000.00"), USD)
+principal = Money(100000.00, USD)
 interest = Money.from_float(542.50)
 
 total = principal + interest
@@ -107,13 +106,12 @@ APR with multiple compounding conventions:
 
 ```python
 from credkit import InterestRate, CompoundingConvention
-from decimal import Decimal
 
 # 5.25% APR with monthly compounding (default for consumer loans)
 rate = InterestRate.from_percent(5.25)
 
 # Calculate present value discount factor
-pv_factor = rate.discount_factor(Decimal("10"))  # 10 years
+pv_factor = rate.discount_factor(10.0)  # 10 years
 
 # Convert between compounding conventions
 annual_equiv = rate.convert_to(CompoundingConvention.ANNUAL)
@@ -399,7 +397,6 @@ Industry-standard CPR (Constant Prepayment Rate) modeling:
 
 ```python
 from credkit import PrepaymentRate
-from decimal import Decimal
 
 # Create prepayment rate
 cpr = PrepaymentRate.from_percent(10.0)  # 10% CPR
@@ -410,8 +407,8 @@ smm = cpr.to_smm()
 print(f"SMM: {smm}")  # Single Monthly Mortality
 
 # Scale prepayment rates
-high_prepay = cpr * Decimal("2.0")  # 20% CPR
-low_prepay = cpr * Decimal("0.5")   # 5% CPR
+high_prepay = cpr * 2.0  # 20% CPR
+low_prepay = cpr * 0.5   # 5% CPR
 
 # Compare rates
 if high_prepay > cpr:
@@ -424,14 +421,13 @@ Time-varying prepayment assumptions:
 
 ```python
 from credkit import PrepaymentCurve, PrepaymentRate
-from decimal import Decimal
 
 # Constant CPR for all periods
-constant_curve = PrepaymentCurve.constant_cpr(Decimal("0.10"))  # 10% CPR
+constant_curve = PrepaymentCurve.constant_cpr(0.10)  # 10% CPR
 
 # Industry-standard PSA model
-psa_100 = PrepaymentCurve.psa_model(Decimal("100"))  # 100% PSA
-psa_150 = PrepaymentCurve.psa_model(Decimal("150"))  # 150% PSA
+psa_100 = PrepaymentCurve.psa_model(100.0)  # 100% PSA
+psa_150 = PrepaymentCurve.psa_model(150.0)  # 150% PSA
 
 # PSA model: ramps from 0.2% CPR (month 1) to 6% CPR (month 30+)
 print(f"Month 1: {psa_100.rate_at_month(1).to_percent()}% CPR")
@@ -446,7 +442,7 @@ custom_curve = PrepaymentCurve.from_list([
 ])
 
 # Scale curves (e.g., stress testing)
-stressed_curve = psa_100.scale(Decimal("2.0"))  # 200% PSA
+stressed_curve = psa_100.scale(2.0)  # 200% PSA
 ```
 
 ### Default Rates and Curves
@@ -455,20 +451,19 @@ Model expected default behavior:
 
 ```python
 from credkit import DefaultRate, DefaultCurve
-from decimal import Decimal
 
 # Constant default rate
 cdr = DefaultRate.from_percent(2.0)  # 2% CDR
 mdr = cdr.to_mdr()  # Convert to monthly default rate
 
 # Constant default curve
-constant_defaults = DefaultCurve.constant_cdr(Decimal("0.02"))
+constant_defaults = DefaultCurve.constant_cdr(0.02)
 
 # Vintage curve (typical pattern: low → peak → decline)
 vintage_curve = DefaultCurve.vintage_curve(
-    peak_month=12,                # Defaults peak at month 12
-    peak_cdr=Decimal("0.03"),     # 3% CDR at peak
-    steady_cdr=Decimal("0.01"),   # 1% CDR long-term
+    peak_month=12,      # Defaults peak at month 12
+    peak_cdr=0.03,      # 3% CDR at peak
+    steady_cdr=0.01,    # 1% CDR long-term
 )
 
 print(f"Month 1: {vintage_curve.rate_at_month(1).to_percent()}% CDR")
@@ -482,7 +477,6 @@ Model recovery assumptions:
 
 ```python
 from credkit import LossGivenDefault, Period
-from decimal import Decimal
 
 # Severity-based LGD (loss given default)
 lgd = LossGivenDefault.from_percent(40.0)  # 40% severity
@@ -558,7 +552,6 @@ Generate expected cash flows based on portfolio-level statistics:
 
 ```python
 from credkit import Loan, PrepaymentCurve, FlatDiscountCurve
-from decimal import Decimal
 from datetime import date
 
 # Create loan
@@ -570,7 +563,7 @@ loan = Loan.mortgage(
 )
 
 # Industry assumption: 10% CPR constant
-cpr_curve = PrepaymentCurve.constant_cpr(Decimal("0.10"))
+cpr_curve = PrepaymentCurve.constant_cpr(0.10)
 
 # Generate expected cash flows with month-by-month re-amortization
 expected_schedule = loan.expected_cashflows(prepayment_curve=cpr_curve)
@@ -599,7 +592,6 @@ Compare loan performance to industry standard:
 
 ```python
 from credkit import PrepaymentCurve, FlatDiscountCurve, InterestRate
-from decimal import Decimal
 from datetime import date
 
 # Assume loan and market_curve are already defined from previous example
@@ -612,7 +604,7 @@ results = []
 
 for speed in psa_speeds:
     # Generate PSA curve
-    curve = PrepaymentCurve.psa_model(Decimal(str(speed)))
+    curve = PrepaymentCurve.psa_model(float(speed))
 
     # Generate expected cash flows
     expected = loan.expected_cashflows(prepayment_curve=curve)
@@ -634,7 +626,6 @@ Test multiple prepayment assumptions:
 
 ```python
 from credkit import Loan, Money, InterestRate, PrepaymentCurve, FlatDiscountCurve
-from decimal import Decimal
 from datetime import date
 
 loan = Loan.mortgage(
@@ -653,7 +644,7 @@ print("CPR Sensitivity Analysis:")
 print("-" * 40)
 
 for cpr_pct in [0, 5, 10, 15, 20, 25]:
-    cpr = Decimal(str(cpr_pct)) / 100
+    cpr = cpr_pct / 100.0
     curve = PrepaymentCurve.constant_cpr(cpr)
 
     expected = loan.expected_cashflows(prepayment_curve=curve)
@@ -675,7 +666,7 @@ curve_down = FlatDiscountCurve(
 )
 
 # Use same prepayment assumption
-cpr_curve = PrepaymentCurve.constant_cpr(Decimal("0.10"))
+cpr_curve = PrepaymentCurve.constant_cpr(0.10)
 expected_cf = loan.expected_cashflows(prepayment_curve=cpr_curve)
 
 npv_up = expected_cf.present_value(curve_up)
@@ -683,7 +674,7 @@ npv_down = expected_cf.present_value(curve_down)
 npv_base = expected_cf.present_value(discount_curve)
 
 # Effective duration = (PV_down - PV_up) / (2 * PV_base * rate_change)
-duration = (npv_down - npv_up) / (2 * npv_base * Decimal(str(rate_shock / 100)))
+duration = (npv_down - npv_up) / (2 * npv_base * (rate_shock / 100.0))
 print(f"\nEffective duration: {duration} years")
 ```
 
@@ -743,7 +734,6 @@ Analyze multiple loans with behavioral assumptions:
 
 ```python
 from credkit import Loan, Money, InterestRate, PrepaymentCurve, FlatDiscountCurve
-from decimal import Decimal
 from datetime import date
 
 # Create portfolio of loans
@@ -755,7 +745,7 @@ portfolio = [
 ]
 
 # Apply behavioral assumptions
-prepay_curve = PrepaymentCurve.constant_cpr(Decimal("0.12"))  # 12% CPR
+prepay_curve = PrepaymentCurve.constant_cpr(0.12)  # 12% CPR
 discount_curve = FlatDiscountCurve(
     InterestRate.from_percent(5.0),
     valuation_date=date(2024, 1, 1)

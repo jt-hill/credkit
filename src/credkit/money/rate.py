@@ -1,7 +1,6 @@
 """Interest rate representations with compounding conventions."""
 
 from dataclasses import dataclass
-from decimal import Decimal
 from enum import Enum
 from math import e
 from typing import Self
@@ -73,7 +72,7 @@ class InterestRate:
     annual percentage rates (APR) with monthly compounding.
     """
 
-    rate: Decimal
+    rate: float
     """Annual interest rate as a decimal (e.g., 0.05 for 5%)."""
 
     compounding: CompoundingConvention = CompoundingConvention.MONTHLY
@@ -84,13 +83,15 @@ class InterestRate:
 
     def __post_init__(self) -> None:
         """Validate rate parameters."""
-        if not isinstance(self.rate, Decimal):
-            object.__setattr__(self, "rate", Decimal(str(self.rate)))
+        if not isinstance(self.rate, (int, float)):
+            raise TypeError(f"rate must be int or float, got {type(self.rate)}")
+        if isinstance(self.rate, int):
+            object.__setattr__(self, "rate", float(self.rate))
 
     @classmethod
     def from_percent(
         cls,
-        percent: float | Decimal,
+        percent: float,
         compounding: CompoundingConvention = CompoundingConvention.MONTHLY,
         day_count: DayCountBasis = DayCountBasis(DayCountConvention.ACTUAL_365),
     ) -> Self:
@@ -107,17 +108,15 @@ class InterestRate:
 
         Example:
             >>> InterestRate.from_percent(5.25)  # 5.25% APR
-            InterestRate(rate=Decimal('0.0525'), ...)
+            InterestRate(rate=0.0525, ...)
         """
-        if isinstance(percent, float):
-            percent = Decimal(str(percent))
-        rate = percent / Decimal("100")
+        rate = percent / 100.0
         return cls(rate=rate, compounding=compounding, day_count=day_count)
 
     @classmethod
     def from_basis_points(
         cls,
-        bps: int | Decimal,
+        bps: int | float,
         compounding: CompoundingConvention = CompoundingConvention.MONTHLY,
         day_count: DayCountBasis = DayCountBasis(DayCountConvention.ACTUAL_365),
     ) -> Self:
@@ -134,22 +133,20 @@ class InterestRate:
 
         Example:
             >>> InterestRate.from_basis_points(525)  # 525 bps = 5.25%
-            InterestRate(rate=Decimal('0.0525'), ...)
+            InterestRate(rate=0.0525, ...)
         """
-        if isinstance(bps, int):
-            bps = Decimal(bps)
-        rate = bps / Decimal("10000")
+        rate = bps / 10000.0
         return cls(rate=rate, compounding=compounding, day_count=day_count)
 
-    def to_percent(self) -> Decimal:
+    def to_percent(self) -> float:
         """Convert rate to percentage."""
-        return self.rate * Decimal("100")
+        return self.rate * 100.0
 
-    def to_basis_points(self) -> Decimal:
+    def to_basis_points(self) -> float:
         """Convert rate to basis points."""
-        return self.rate * Decimal("10000")
+        return self.rate * 10000.0
 
-    def discount_factor(self, years: Decimal | float) -> Decimal:
+    def discount_factor(self, years: float) -> float:
         """
         Calculate the discount factor for a given time period.
 
@@ -160,36 +157,32 @@ class InterestRate:
             years: Time period in years
 
         Returns:
-            Discount factor as a Decimal
+            Discount factor as a float
 
         Note:
             For consumer loans with monthly compounding:
             discount_factor = 1 / (1 + r/12)^(12*years)
         """
-        if isinstance(years, float):
-            years = Decimal(str(years))
-
         if years == 0:
-            return Decimal("1")
+            return 1.0
 
         match self.compounding:
             case CompoundingConvention.SIMPLE:
                 # Simple: PV = FV / (1 + r*t)
-                return Decimal("1") / (Decimal("1") + self.rate * years)
+                return 1.0 / (1.0 + self.rate * years)
 
             case CompoundingConvention.CONTINUOUS:
                 # Continuous: PV = FV * e^(-r*t)
-                exponent = float(-self.rate * years)
-                return Decimal(str(e**exponent))
+                return e ** (-self.rate * years)
 
             case _:
                 # Discrete compounding: PV = FV / (1 + r/n)^(n*t)
-                n = Decimal(str(self.compounding.periods_per_year))
+                n = float(self.compounding.periods_per_year)
                 periodic_rate = self.rate / n
                 num_periods = n * years
-                return Decimal("1") / ((Decimal("1") + periodic_rate) ** num_periods)
+                return 1.0 / ((1.0 + periodic_rate) ** num_periods)
 
-    def compound_factor(self, years: Decimal | float) -> Decimal:
+    def compound_factor(self, years: float) -> float:
         """
         Calculate the compound factor for a given time period.
 
@@ -200,34 +193,30 @@ class InterestRate:
             years: Time period in years
 
         Returns:
-            Compound factor as a Decimal
+            Compound factor as a float
 
         Note:
             For consumer loans with monthly compounding:
             compound_factor = (1 + r/12)^(12*years)
         """
-        if isinstance(years, float):
-            years = Decimal(str(years))
-
         if years == 0:
-            return Decimal("1")
+            return 1.0
 
         match self.compounding:
             case CompoundingConvention.SIMPLE:
                 # Simple: FV = PV * (1 + r*t)
-                return Decimal("1") + self.rate * years
+                return 1.0 + self.rate * years
 
             case CompoundingConvention.CONTINUOUS:
                 # Continuous: FV = PV * e^(r*t)
-                exponent = float(self.rate * years)
-                return Decimal(str(e**exponent))
+                return e ** (self.rate * years)
 
             case _:
                 # Discrete compounding: FV = PV * (1 + r/n)^(n*t)
-                n = Decimal(str(self.compounding.periods_per_year))
+                n = float(self.compounding.periods_per_year)
                 periodic_rate = self.rate / n
                 num_periods = n * years
-                return (Decimal("1") + periodic_rate) ** num_periods
+                return (1.0 + periodic_rate) ** num_periods
 
     def convert_to(self, target_compounding: CompoundingConvention) -> Self:
         """
@@ -246,27 +235,25 @@ class InterestRate:
             A 5% APR with monthly compounding ≈ 5.12% with annual compounding
         """
         # Get compound factor for one year with current compounding
-        cf = self.compound_factor(Decimal("1"))
+        cf = self.compound_factor(1.0)
 
         # Solve for rate with target compounding that gives same compound factor
         if target_compounding == CompoundingConvention.SIMPLE:
             # (1 + r*1) = cf => r = cf - 1
-            new_rate = cf - Decimal("1")
+            new_rate = cf - 1.0
 
         elif target_compounding == CompoundingConvention.CONTINUOUS:
             # e^(r*1) = cf => r = ln(cf)
             import math
 
-            new_rate = Decimal(str(math.log(float(cf))))
+            new_rate = math.log(cf)
 
         else:
             # (1 + r/n)^n = cf => r = n * (cf^(1/n) - 1)
-            n = Decimal(str(target_compounding.periods_per_year))
-            power = Decimal("1") / n
-            # Use float for fractional power, convert back to Decimal
-            cf_float = float(cf)
-            new_periodic = cf_float ** float(power) - 1.0
-            new_rate = n * Decimal(str(new_periodic))
+            n = float(target_compounding.periods_per_year)
+            power = 1.0 / n
+            new_periodic = cf**power - 1.0
+            new_rate = n * new_periodic
 
         return InterestRate(
             rate=new_rate, compounding=target_compounding, day_count=self.day_count

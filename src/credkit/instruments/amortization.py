@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import date
-from decimal import Decimal
 from enum import Enum
 
 from ..cashflow import CashFlow, CashFlowSchedule, CashFlowType
@@ -75,7 +74,7 @@ class ReamortizationMethod(Enum):
 
 def calculate_level_payment(
     principal: Money,
-    periodic_rate: Decimal,
+    periodic_rate: float,
     num_payments: int,
 ) -> Money:
     """
@@ -94,7 +93,7 @@ def calculate_level_payment(
 
     Example:
         >>> principal = Money.from_float(100000)
-        >>> rate = Decimal("0.005")  # 0.5% per month
+        >>> rate = 0.005  # 0.5% per month
         >>> payments = 360  # 30 years monthly
         >>> payment = calculate_level_payment(principal, rate, payments)
         >>> # Returns approximately $599.55
@@ -110,10 +109,10 @@ def calculate_level_payment(
         raise ValueError(f"Periodic rate must be non-negative, got {periodic_rate}")
 
     # PMT = P * [r(1+r)^n] / [(1+r)^n - 1]
-    one_plus_r = Decimal("1") + periodic_rate
+    one_plus_r = 1.0 + periodic_rate
     factor = one_plus_r ** num_payments
     numerator = periodic_rate * factor
-    denominator = factor - Decimal("1")
+    denominator = factor - 1.0
 
     payment_amount = principal.amount * (numerator / denominator)
     return Money(amount=payment_amount, currency=principal.currency)
@@ -171,7 +170,7 @@ def generate_payment_dates(
 
 def generate_level_payment_schedule(
     principal: Money,
-    periodic_rate: Decimal,
+    periodic_rate: float,
     num_payments: int,
     payment_dates: list[date],
     payment_amount: Money,
@@ -195,7 +194,7 @@ def generate_level_payment_schedule(
 
     Example:
         >>> principal = Money.from_float(100000)
-        >>> rate = Decimal("0.005")
+        >>> rate = 0.005
         >>> dates = [date(2024, i, 1) for i in range(1, 13)]
         >>> payment = calculate_level_payment(principal, rate, 12)
         >>> schedule = generate_level_payment_schedule(principal, rate, 12, dates, payment)
@@ -250,7 +249,7 @@ def generate_level_payment_schedule(
 
 def generate_level_principal_schedule(
     principal: Money,
-    periodic_rate: Decimal,
+    periodic_rate: float,
     num_payments: int,
     payment_dates: list[date],
 ) -> CashFlowSchedule:
@@ -271,7 +270,7 @@ def generate_level_principal_schedule(
 
     Example:
         >>> principal = Money.from_float(120000)
-        >>> rate = Decimal("0.005")
+        >>> rate = 0.005
         >>> dates = [date(2024, i, 1) for i in range(1, 13)]
         >>> schedule = generate_level_principal_schedule(principal, rate, 12, dates)
     """
@@ -327,7 +326,7 @@ def generate_level_principal_schedule(
 
 def generate_interest_only_schedule(
     principal: Money,
-    periodic_rate: Decimal,
+    periodic_rate: float,
     num_payments: int,
     payment_dates: list[date],
 ) -> CashFlowSchedule:
@@ -348,7 +347,7 @@ def generate_interest_only_schedule(
 
     Example:
         >>> principal = Money.from_float(200000)
-        >>> rate = Decimal("0.004")
+        >>> rate = 0.004
         >>> dates = [date(2024, i, 1) for i in range(1, 13)]
         >>> schedule = generate_interest_only_schedule(principal, rate, 12, dates)
     """
@@ -424,7 +423,7 @@ def generate_bullet_schedule(
 
 def reamortize_loan(
     remaining_balance: Money,
-    annual_rate: Decimal,
+    annual_rate: float,
     payment_frequency: PaymentFrequency,
     amortization_type: AmortizationType,
     start_date: date,
@@ -462,7 +461,7 @@ def reamortize_loan(
         >>> remaining = Money.from_float(80000)
         >>> schedule = reamortize_loan(
         ...     remaining_balance=remaining,
-        ...     annual_rate=Decimal("0.06"),
+        ...     annual_rate=0.06,
         ...     payment_frequency=PaymentFrequency.MONTHLY,
         ...     amortization_type=AmortizationType.LEVEL_PAYMENT,
         ...     start_date=date(2025, 2, 1),
@@ -514,7 +513,7 @@ def reamortize_loan(
             )
 
         # Calculate periodic rate
-        periods_per_year = Decimal(str(payment_frequency.payments_per_year))
+        periods_per_year = float(payment_frequency.payments_per_year)
         periodic_rate = annual_rate / periods_per_year
 
         if periodic_rate == 0:
@@ -523,7 +522,6 @@ def reamortize_loan(
         else:
             # Solve for n: PMT = P * [r(1+r)^n] / [(1+r)^n - 1]
             # Rearranged: n = log(PMT / (PMT - P*r)) / log(1+r)
-            from decimal import Decimal as D
             import math
 
             pmt = target_payment.amount
@@ -536,7 +534,7 @@ def reamortize_loan(
                     f"Loan cannot be amortized with this payment amount."
                 )
 
-            # Use float for logarithm calculation (Decimal doesn't support log)
+            # Calculate number of payments using logarithm
             numerator = math.log(float(pmt / (pmt - p * r)))
             denominator = math.log(float(1 + r))
             num_payments = int(numerator / denominator) + 1
@@ -546,9 +544,9 @@ def reamortize_loan(
 
     # Calculate periodic rate
     if payment_frequency.payments_per_year == 0:
-        periodic_rate = Decimal("0")
+        periodic_rate = 0.0
     else:
-        periods_per_year = Decimal(str(payment_frequency.payments_per_year))
+        periods_per_year = float(payment_frequency.payments_per_year)
         periodic_rate = annual_rate / periods_per_year
 
     # Generate payment dates

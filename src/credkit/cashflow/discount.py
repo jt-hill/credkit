@@ -3,7 +3,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal
 from enum import Enum
 from typing import Self
 
@@ -43,7 +42,7 @@ class DiscountCurve(ABC):
         ...
 
     @abstractmethod
-    def discount_factor(self, target_date: date, valuation_date: date | None = None) -> Decimal:
+    def discount_factor(self, target_date: date, valuation_date: date | None = None) -> float:
         """
         Calculate discount factor from valuation date to target date.
 
@@ -52,7 +51,7 @@ class DiscountCurve(ABC):
             valuation_date: Date to discount to (defaults to curve's valuation date)
 
         Returns:
-            Discount factor as Decimal (typically 0 < df <= 1)
+            Discount factor as float (typically 0 < df <= 1)
         """
         ...
 
@@ -87,7 +86,7 @@ class FlatDiscountCurve(DiscountCurve):
         """Date from which discounting is performed."""
         return self._valuation_date
 
-    def discount_factor(self, target_date: date, valuation_date: date | None = None) -> Decimal:
+    def discount_factor(self, target_date: date, valuation_date: date | None = None) -> float:
         """
         Calculate discount factor using the flat rate.
 
@@ -96,7 +95,7 @@ class FlatDiscountCurve(DiscountCurve):
             valuation_date: Date to discount to (defaults to curve's valuation date)
 
         Returns:
-            Discount factor as Decimal
+            Discount factor as float
 
         Example:
             >>> curve = FlatDiscountCurve(InterestRate.from_percent(5.0), date(2024, 1, 1))
@@ -106,7 +105,7 @@ class FlatDiscountCurve(DiscountCurve):
 
         # No discounting if target is on or before valuation date
         if target_date <= val_date:
-            return Decimal("1")
+            return 1.0
 
         # Calculate year fraction using day count convention
         year_fraction = self.day_count.year_fraction(val_date, target_date)
@@ -147,7 +146,7 @@ class ZeroCurve(DiscountCurve):
     _valuation_date: date
     """Reference date for the curve."""
 
-    points: tuple[tuple[date, Decimal], ...]
+    points: tuple[tuple[date, float], ...]
     """Curve points as (date, zero_rate) pairs, must be chronologically ordered."""
 
     day_count: DayCountBasis = DayCountBasis(DayCountConvention.ACTUAL_365)
@@ -167,18 +166,20 @@ class ZeroCurve(DiscountCurve):
         if len(self.points) < 1:
             raise ValueError("Zero curve must have at least one point")
 
-        # Validate points are tuples of (date, Decimal)
+        # Validate points are tuples of (date, float)
         for i, point in enumerate(self.points):
             if not isinstance(point, tuple) or len(point) != 2:
-                raise ValueError(f"Point {i} must be (date, Decimal) tuple")
+                raise ValueError(f"Point {i} must be (date, float) tuple")
             dt, rate = point
             if not isinstance(dt, date):
                 raise TypeError(f"Point {i} date must be date, got {type(dt)}")
-            if not isinstance(rate, Decimal):
-                # Auto-convert to Decimal
+            if not isinstance(rate, (int, float)):
+                raise TypeError(f"Point {i} rate must be float, got {type(rate)}")
+            # Auto-convert int to float
+            if isinstance(rate, int):
                 object.__setattr__(
                     self, "points", tuple(
-                        (p[0], p[1] if isinstance(p[1], Decimal) else Decimal(str(p[1])))
+                        (p[0], float(p[1]))
                         for p in self.points
                     )
                 )
@@ -207,7 +208,7 @@ class ZeroCurve(DiscountCurve):
     def from_rates(
         cls,
         valuation_date: date,
-        rates: list[tuple[date, float | Decimal]],
+        rates: list[tuple[date, float]],
         day_count: DayCountBasis = DayCountBasis(DayCountConvention.ACTUAL_365),
         compounding: "CompoundingConvention | None" = None,
         interpolation: InterpolationType = InterpolationType.LINEAR,
@@ -231,20 +232,20 @@ class ZeroCurve(DiscountCurve):
             ...     [(date(2025, 1, 1), 0.05), (date(2026, 1, 1), 0.055)]
             ... )
         """
-        # Convert to Decimal and sort
-        decimal_rates = sorted(
-            [(dt, Decimal(str(rate))) for dt, rate in rates],
+        # Convert to float and sort
+        float_rates = sorted(
+            [(dt, float(rate)) for dt, rate in rates],
             key=lambda x: x[0]
         )
         return cls(
             _valuation_date=valuation_date,
-            points=tuple(decimal_rates),
+            points=tuple(float_rates),
             day_count=day_count,
             compounding=compounding,
             interpolation=interpolation,
         )
 
-    def discount_factor(self, target_date: date, valuation_date: date | None = None) -> Decimal:
+    def discount_factor(self, target_date: date, valuation_date: date | None = None) -> float:
         """
         Calculate discount factor using interpolated zero rate.
 
@@ -253,7 +254,7 @@ class ZeroCurve(DiscountCurve):
             valuation_date: Date to discount to (defaults to curve's valuation date)
 
         Returns:
-            Discount factor as Decimal
+            Discount factor as float
 
         Example:
             >>> curve = ZeroCurve.from_rates(date(2024, 1, 1), [(date(2025, 1, 1), 0.05)])
@@ -263,7 +264,7 @@ class ZeroCurve(DiscountCurve):
 
         # No discounting if target is on or before valuation date
         if target_date <= val_date:
-            return Decimal("1")
+            return 1.0
 
         # Get interpolated zero rate for target date
         zero_rate = self._interpolate_rate(target_date, val_date)
@@ -333,12 +334,12 @@ class ZeroCurve(DiscountCurve):
         # Calculate implied forward rate
         # df_end = df_start / (1 + r)^t => r = (df_start/df_end)^(1/t) - 1
         ratio = df_start / df_end
-        forward_factor = ratio ** (Decimal("1") / Decimal(str(year_fraction)))
-        forward_rate = forward_factor - Decimal("1")
+        forward_factor = ratio ** (1.0 / year_fraction)
+        forward_rate = forward_factor - 1.0
 
         return InterestRate(rate=forward_rate, compounding=self.compounding, day_count=self.day_count)
 
-    def _interpolate_rate(self, target_date: date, val_date: date) -> Decimal:
+    def _interpolate_rate(self, target_date: date, val_date: date) -> float:
         """
         Interpolate zero rate for a target date.
 
@@ -347,7 +348,7 @@ class ZeroCurve(DiscountCurve):
             val_date: Valuation date
 
         Returns:
-            Interpolated zero rate as Decimal
+            Interpolated zero rate as float
         """
         # If before first point, use first rate (flat extrapolation)
         if target_date <= self.points[0][0]:
@@ -371,7 +372,7 @@ class ZeroCurve(DiscountCurve):
                     t_target = self.day_count.year_fraction(val_date, target_date)
 
                     # Linear interpolation: r = r1 + (r2 - r1) * (t - t1) / (t2 - t1)
-                    weight = (Decimal(str(t_target)) - Decimal(str(t1))) / (Decimal(str(t2)) - Decimal(str(t1)))
+                    weight = (t_target - t1) / (t2 - t1)
                     return rate1 + (rate2 - rate1) * weight
 
                 else:  # LOG_LINEAR
@@ -386,30 +387,30 @@ class ZeroCurve(DiscountCurve):
                     r1_obj = InterestRate(rate=rate1, compounding=self.compounding, day_count=self.day_count)
                     r2_obj = InterestRate(rate=rate2, compounding=self.compounding, day_count=self.day_count)
 
-                    df1 = r1_obj.discount_factor(Decimal(str(t1)))
-                    df2 = r2_obj.discount_factor(Decimal(str(t2)))
+                    df1 = r1_obj.discount_factor(t1)
+                    df2 = r2_obj.discount_factor(t2)
 
                     # Linear interpolation on log(df)
                     import math
-                    log_df1 = Decimal(str(math.log(float(df1))))
-                    log_df2 = Decimal(str(math.log(float(df2))))
+                    log_df1 = math.log(df1)
+                    log_df2 = math.log(df2)
 
-                    weight = (Decimal(str(t_target)) - Decimal(str(t1))) / (Decimal(str(t2)) - Decimal(str(t1)))
+                    weight = (t_target - t1) / (t2 - t1)
                     log_df_target = log_df1 + (log_df2 - log_df1) * weight
-                    df_target = Decimal(str(math.exp(float(log_df_target))))
+                    df_target = math.exp(log_df_target)
 
                     # Solve for rate from discount factor
                     # df = (1 + r/n)^(-n*t) => r = n * (df^(-1/n/t) - 1)
                     from ..money.rate import CompoundingConvention
                     if self.compounding == CompoundingConvention.CONTINUOUS:
                         # df = e^(-r*t) => r = -ln(df) / t
-                        return -log_df_target / Decimal(str(t_target))
+                        return -log_df_target / t_target
                     else:
                         # Solve: (1 + r/n)^(n*t) = 1/df
-                        n = Decimal(str(self.compounding.periods_per_year))
-                        power = Decimal("1") / (n * Decimal(str(t_target)))
-                        base = (Decimal("1") / df_target) ** power
-                        return n * (base - Decimal("1"))
+                        n = float(self.compounding.periods_per_year)
+                        power = 1.0 / (n * t_target)
+                        base = (1.0 / df_target) ** power
+                        return n * (base - 1.0)
 
         # Should never reach here due to earlier checks
         return self.points[-1][1]

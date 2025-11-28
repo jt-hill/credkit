@@ -9,7 +9,6 @@ Provides tools for modeling prepayment behavior using industry-standard metrics:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -30,13 +29,13 @@ class PrepaymentRate:
         CPR of 100% means entire balance prepays within the year.
     """
 
-    annual_rate: Decimal
+    annual_rate: float
     """Annual prepayment rate (0.10 = 10% CPR)."""
 
     def __post_init__(self) -> None:
         """Validate prepayment rate."""
-        if not isinstance(self.annual_rate, Decimal):
-            raise TypeError(f"annual_rate must be Decimal, got {type(self.annual_rate)}")
+        if not isinstance(self.annual_rate, (int, float)):
+            raise TypeError(f"annual_rate must be float, got {type(self.annual_rate)}")
 
         if self.annual_rate < 0:
             raise ValueError(f"annual_rate must be non-negative, got {self.annual_rate}")
@@ -47,8 +46,11 @@ class PrepaymentRate:
                 f"Did you mean {self.annual_rate / 100}?"
             )
 
+        if isinstance(self.annual_rate, int):
+            object.__setattr__(self, "annual_rate", float(self.annual_rate))
+
     @classmethod
-    def from_percent(cls, percent: float | Decimal) -> Self:
+    def from_percent(cls, percent: float) -> Self:
         """
         Create PrepaymentRate from percentage.
 
@@ -60,22 +62,20 @@ class PrepaymentRate:
 
         Example:
             >>> PrepaymentRate.from_percent(10.0)
-            PrepaymentRate(annual_rate=Decimal('0.10'))
+            PrepaymentRate(annual_rate=0.10)
         """
-        if isinstance(percent, float):
-            percent = Decimal(str(percent))
-        return cls(annual_rate=percent / 100)
+        return cls(annual_rate=percent / 100.0)
 
     @classmethod
     def zero(cls) -> Self:
         """Create zero prepayment rate (no prepayments)."""
-        return cls(annual_rate=Decimal("0"))
+        return cls(annual_rate=0.0)
 
-    def to_percent(self) -> Decimal:
+    def to_percent(self) -> float:
         """Convert to percentage representation."""
-        return self.annual_rate * 100
+        return self.annual_rate * 100.0
 
-    def to_smm(self) -> Decimal:
+    def to_smm(self) -> float:
         """
         Convert CPR to SMM (Single Monthly Mortality).
 
@@ -83,34 +83,32 @@ class PrepaymentRate:
         Formula: SMM = 1 - (1 - CPR)^(1/12)
 
         Returns:
-            Monthly prepayment rate as Decimal
+            Monthly prepayment rate as float
 
         Example:
             >>> cpr = PrepaymentRate.from_percent(10.0)
             >>> cpr.to_smm()
-            Decimal('0.00874...')  # Approximately 0.87% monthly
+            0.00874...  # Approximately 0.87% monthly
         """
         if self.annual_rate == 0:
-            return Decimal("0")
+            return 0.0
 
         # SMM = 1 - (1 - CPR)^(1/12)
-        # Using precise decimal arithmetic
-        one = Decimal("1")
-        one_twelfth = Decimal("1") / Decimal("12")
+        one_twelfth = 1.0 / 12.0
 
         # (1 - CPR)
-        survival_annual = one - self.annual_rate
+        survival_annual = 1.0 - self.annual_rate
 
-        # (1 - CPR)^(1/12) - use pow with Decimal for precision
+        # (1 - CPR)^(1/12)
         survival_monthly = survival_annual ** one_twelfth
 
         # SMM = 1 - survival_monthly
-        smm = one - survival_monthly
+        smm = 1.0 - survival_monthly
 
         return smm
 
     @classmethod
-    def from_smm(cls, smm: Decimal) -> Self:
+    def from_smm(cls, smm: float) -> Self:
         """
         Create PrepaymentRate from SMM (Single Monthly Mortality).
 
@@ -121,11 +119,11 @@ class PrepaymentRate:
             PrepaymentRate instance with equivalent CPR
 
         Example:
-            >>> PrepaymentRate.from_smm(Decimal('0.00874'))
-            PrepaymentRate(annual_rate=Decimal('0.10...'))
+            >>> PrepaymentRate.from_smm(0.00874)
+            PrepaymentRate(annual_rate=0.10...)
         """
-        if not isinstance(smm, Decimal):
-            raise TypeError(f"smm must be Decimal, got {type(smm)}")
+        if not isinstance(smm, (int, float)):
+            raise TypeError(f"smm must be float, got {type(smm)}")
 
         if smm < 0 or smm > 1:
             raise ValueError(f"smm must be between 0 and 1, got {smm}")
@@ -134,12 +132,9 @@ class PrepaymentRate:
             return cls.zero()
 
         # CPR = 1 - (1 - SMM)^12
-        one = Decimal("1")
-        twelve = Decimal("12")
-
-        survival_monthly = one - smm
-        survival_annual = survival_monthly ** twelve
-        cpr = one - survival_annual
+        survival_monthly = 1.0 - smm
+        survival_annual = survival_monthly ** 12.0
+        cpr = 1.0 - survival_annual
 
         return cls(annual_rate=cpr)
 
@@ -149,14 +144,14 @@ class PrepaymentRate:
 
     # Arithmetic operations
 
-    def __mul__(self, scalar: Decimal | int | float) -> PrepaymentRate:
+    def __mul__(self, scalar: int | float) -> PrepaymentRate:
         """Scale prepayment rate by scalar."""
-        if isinstance(scalar, (int, float)):
-            scalar = Decimal(str(scalar))
+        if not isinstance(scalar, (int, float)):
+            return NotImplemented
 
         return PrepaymentRate(annual_rate=self.annual_rate * scalar)
 
-    def __rmul__(self, scalar: Decimal | int | float) -> PrepaymentRate:
+    def __rmul__(self, scalar: int | float) -> PrepaymentRate:
         """Scale prepayment rate by scalar (reverse)."""
         return self.__mul__(scalar)
 
@@ -248,33 +243,33 @@ class PrepaymentCurve:
                 raise ValueError("Duplicate months found in curve")
 
     @classmethod
-    def constant_cpr(cls, cpr: Decimal | PrepaymentRate) -> Self:
+    def constant_cpr(cls, cpr: float | PrepaymentRate) -> Self:
         """
         Create constant CPR curve (same rate for all periods).
 
         Args:
-            cpr: Either a PrepaymentRate or Decimal CPR value
+            cpr: Either a PrepaymentRate or float CPR value
 
         Returns:
             PrepaymentCurve with constant rate
 
         Example:
-            >>> curve = PrepaymentCurve.constant_cpr(Decimal('0.10'))
+            >>> curve = PrepaymentCurve.constant_cpr(0.10)
             >>> curve.rate_at_month(1) == curve.rate_at_month(360)
             True
         """
-        if isinstance(cpr, Decimal):
-            rate = PrepaymentRate(annual_rate=cpr)
+        if isinstance(cpr, (int, float)):
+            rate = PrepaymentRate(annual_rate=float(cpr))
         elif isinstance(cpr, PrepaymentRate):
             rate = cpr
         else:
-            raise TypeError(f"cpr must be Decimal or PrepaymentRate, got {type(cpr)}")
+            raise TypeError(f"cpr must be float or PrepaymentRate, got {type(cpr)}")
 
         # Single point at month 1 defines constant rate for all subsequent months
         return cls(rates_by_month=((1, rate),))
 
     @classmethod
-    def psa_model(cls, psa_percent: Decimal = Decimal("100")) -> Self:
+    def psa_model(cls, psa_percent: float = 100.0) -> Self:
         """
         Create PSA (Public Securities Association) standard prepayment curve.
 
@@ -291,20 +286,20 @@ class PrepaymentCurve:
             PrepaymentCurve following PSA model
 
         Example:
-            >>> psa_100 = PrepaymentCurve.psa_model(Decimal('100'))
+            >>> psa_100 = PrepaymentCurve.psa_model(100.0)
             >>> psa_100.rate_at_month(1).to_percent()
-            Decimal('0.2')
+            0.2
             >>> psa_100.rate_at_month(30).to_percent()
-            Decimal('6.0')
+            6.0
         """
-        if not isinstance(psa_percent, Decimal):
-            raise TypeError(f"psa_percent must be Decimal, got {type(psa_percent)}")
+        if not isinstance(psa_percent, (int, float)):
+            raise TypeError(f"psa_percent must be float, got {type(psa_percent)}")
 
         if psa_percent < 0:
             raise ValueError(f"psa_percent must be non-negative, got {psa_percent}")
 
         # PSA scaling factor
-        scale = psa_percent / Decimal("100")
+        scale = psa_percent / 100.0
 
         # Build curve: monthly points from 1 to 30 (ramp), then plateau
         rates = []
@@ -312,12 +307,12 @@ class PrepaymentCurve:
         for month in range(1, 30):
             # Linear ramp from 0.2% to 6.0% over months 1-30
             # Formula: CPR = 0.2% + (month - 1) * (5.8% / 29)
-            base_cpr = Decimal("0.002") + (Decimal(str(month - 1)) * Decimal("0.058") / Decimal("29"))
+            base_cpr = 0.002 + (float(month - 1) * 0.058 / 29.0)
             cpr = base_cpr * scale
             rates.append((month, PrepaymentRate(annual_rate=cpr)))
 
         # Month 30+ plateau at 6% CPR (scaled)
-        plateau_cpr = Decimal("0.06") * scale
+        plateau_cpr = 0.06 * scale
         rates.append((30, PrepaymentRate(annual_rate=plateau_cpr)))
 
         return cls(rates_by_month=tuple(rates))
@@ -349,9 +344,9 @@ class PrepaymentCurve:
             PrepaymentRate for that month
 
         Example:
-            >>> curve = PrepaymentCurve.constant_cpr(Decimal('0.10'))
+            >>> curve = PrepaymentCurve.constant_cpr(0.10)
             >>> curve.rate_at_month(12)
-            PrepaymentRate(annual_rate=Decimal('0.10'))
+            PrepaymentRate(annual_rate=0.10)
         """
         if month < 1:
             raise ValueError(f"Month must be >= 1, got {month}")
@@ -373,7 +368,7 @@ class PrepaymentCurve:
 
         return applicable_rate
 
-    def smm_at_month(self, month: int) -> Decimal:
+    def smm_at_month(self, month: int) -> float:
         """
         Get SMM (Single Monthly Mortality) at specific month.
 
@@ -383,11 +378,11 @@ class PrepaymentCurve:
             month: Month number (1-indexed)
 
         Returns:
-            Monthly prepayment rate as Decimal
+            Monthly prepayment rate as float
         """
         return self.rate_at_month(month).to_smm()
 
-    def scale(self, factor: Decimal) -> PrepaymentCurve:
+    def scale(self, factor: float) -> PrepaymentCurve:
         """
         Scale all rates in the curve by a factor.
 
@@ -398,8 +393,8 @@ class PrepaymentCurve:
             New PrepaymentCurve with scaled rates
 
         Example:
-            >>> psa_100 = PrepaymentCurve.psa_model(Decimal('100'))
-            >>> psa_50 = psa_100.scale(Decimal('0.5'))
+            >>> psa_100 = PrepaymentCurve.psa_model(100.0)
+            >>> psa_50 = psa_100.scale(0.5)
         """
         scaled_rates = [
             (month, rate * factor)
