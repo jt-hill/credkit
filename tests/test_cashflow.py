@@ -41,8 +41,6 @@ class TestCashFlow:
         )
         assert cf.description == "Monthly interest payment"
 
-
-
     def test_comparison_operators(self):
         """Test comparison by date."""
         cf1 = CashFlow(date(2025, 1, 1), Money.from_float(100), CashFlowType.PRINCIPAL)
@@ -86,7 +84,6 @@ class TestCashFlow:
         pv = cf.present_value(curve)
         # Should not be discounted
         assert pv.amount == 1000.0
-
 
 
 class TestFlatDiscountCurve:
@@ -146,7 +143,6 @@ class TestZeroCurve:
         )
         assert len(curve.points) == 3
         assert curve.valuation_date == date(2024, 1, 1)
-
 
     def test_discount_factor_exact_point(self):
         """Test discount factor at exact curve point."""
@@ -421,3 +417,269 @@ class TestCashFlowSchedule:
         ]
         if jan_principal:
             assert jan_principal[0].amount == Money.from_float(200)
+
+    def test_to_arrays(self):
+        """Test extracting dates and amounts as arrays."""
+        cf1 = CashFlow(date(2025, 1, 1), Money.from_float(1000), CashFlowType.PRINCIPAL)
+        cf2 = CashFlow(date(2025, 2, 1), Money.from_float(50), CashFlowType.INTEREST)
+        cf3 = CashFlow(date(2025, 3, 1), Money.from_float(1000), CashFlowType.PRINCIPAL)
+        schedule = CashFlowSchedule(cash_flows=(cf1, cf2, cf3))
+
+        dates, amounts = schedule.to_arrays()
+
+        assert len(dates) == 3
+        assert len(amounts) == 3
+        assert dates == [date(2025, 1, 1), date(2025, 2, 1), date(2025, 3, 1)]
+        assert amounts == [1000.0, 50.0, 1000.0]
+
+    def test_to_arrays_empty(self):
+        """Test to_arrays on empty schedule."""
+        schedule = CashFlowSchedule.empty()
+        dates, amounts = schedule.to_arrays()
+        assert dates == []
+        assert amounts == []
+
+    def test_xirr_simple(self):
+        """Test XIRR with a known scenario."""
+        # Invest 1000 on Jan 1, receive 1100 on Jan 1 next year (10% return)
+        cf = CashFlow(date(2026, 1, 1), Money.from_float(1100), CashFlowType.PRINCIPAL)
+        schedule = CashFlowSchedule(cash_flows=(cf,))
+
+        irr = schedule.xirr(
+            initial_outflow=Money.from_float(1000), outflow_date=date(2025, 1, 1)
+        )
+
+        # Should be approximately 10%
+        assert abs(irr - 0.10) < 0.001
+
+    def test_xirr_monthly_payments(self):
+        """Test XIRR with monthly payment schedule."""
+        # 12 monthly payments of 100 each (total 1200)
+        flows = [
+            CashFlow(date(2025, i, 1), Money.from_float(100), CashFlowType.PRINCIPAL)
+            for i in range(1, 13)
+        ]
+        schedule = CashFlowSchedule(cash_flows=tuple(flows))
+
+        # Initial investment of 1150 (paying at premium)
+        # Total return: (1200 - 1150) / 1150 = 4.3% simple, but IRR is higher
+        # due to early cash flow timing
+        irr = schedule.xirr(
+            initial_outflow=Money.from_float(1150), outflow_date=date(2024, 12, 31)
+        )
+
+        # Should be a positive return
+        assert irr > 0
+        # IRR is higher than simple return due to timing
+        assert irr < 0.15  # Reasonable bound
+
+    def test_xirr_empty_schedule_raises(self):
+        """Test that XIRR raises error for empty schedule."""
+        schedule = CashFlowSchedule.empty()
+
+        with pytest.raises(
+            ValueError, match="Cannot calculate XIRR for empty schedule"
+        ):
+            schedule.xirr(initial_outflow=Money.from_float(1000))
+
+    def test_xirr_default_outflow_date(self):
+        """Test that XIRR defaults outflow date to day before first cash flow."""
+        cf = CashFlow(date(2025, 1, 15), Money.from_float(1050), CashFlowType.PRINCIPAL)
+        schedule = CashFlowSchedule(cash_flows=(cf,))
+
+        # Should use Jan 14 as default outflow date
+        irr = schedule.xirr(initial_outflow=Money.from_float(1000))
+
+        # Very high annualized return for 1 day
+        assert irr > 0
+
+
+class TestXIRRWithLoan:
+    """Tests for XIRR integration with Loan class."""
+
+    def test_xirr_with_loan_at_par(self):
+        """Test XIRR equals coupon rate when purchased at par."""
+        from credkit.instruments import Loan
+
+        loan = Loan.personal_loan(
+            principal=Money.from_float(10000),
+            annual_rate=InterestRate.from_percent(12.0),
+            term_months=12,
+            origination_date=date(2025, 1, 1),
+        )
+
+        schedule = loan.generate_schedule()
+        irr = schedule.xirr(
+            initial_outflow=loan.principal, outflow_date=loan.origination_date
+        )
+
+        # At par, XIRR should approximately equal the coupon rate
+        # May differ slightly due to monthly compounding vs annual
+        assert abs(irr - 0.12) < 0.01
+
+    def test_xirr_with_loan_at_discount(self):
+        """Test XIRR exceeds coupon rate when purchased at discount."""
+        from credkit.instruments import Loan
+
+        loan = Loan.personal_loan(
+            principal=Money.from_float(10000),
+            annual_rate=InterestRate.from_percent(12.0),
+            term_months=12,
+            origination_date=date(2025, 1, 1),
+        )
+
+        schedule = loan.generate_schedule()
+        # Purchase at 95% of par
+        irr = schedule.xirr(
+            initial_outflow=Money.from_float(9500), outflow_date=loan.origination_date
+        )
+
+        # Should exceed 12% since we bought at discount
+        assert irr > 0.12
+
+    def test_xirr_with_loan_at_premium(self):
+        """Test XIRR below coupon rate when purchased at premium."""
+        from credkit.instruments import Loan
+
+        loan = Loan.personal_loan(
+            principal=Money.from_float(10000),
+            annual_rate=InterestRate.from_percent(12.0),
+            term_months=12,
+            origination_date=date(2025, 1, 1),
+        )
+
+        schedule = loan.generate_schedule()
+        # Purchase at 105% of par
+        irr = schedule.xirr(
+            initial_outflow=Money.from_float(10500), outflow_date=loan.origination_date
+        )
+
+        # Should be below 12% since we paid premium
+        assert irr < 0.12
+
+
+class TestYieldToMaturity:
+    """Tests for Loan.yield_to_maturity method."""
+
+    def test_ytm_at_par(self):
+        """Test YTM at par price."""
+        from credkit.instruments import Loan
+
+        loan = Loan.personal_loan(
+            principal=Money.from_float(10000),
+            annual_rate=InterestRate.from_percent(12.0),
+            term_months=12,
+            origination_date=date(2025, 1, 1),
+        )
+
+        # Default price=100.0 means par
+        ytm = loan.yield_to_maturity()
+
+        # Should approximately equal coupon rate
+        assert abs(ytm - 0.12) < 0.01
+
+    def test_ytm_at_discount(self):
+        """Test YTM exceeds coupon when bought at discount."""
+        from credkit.instruments import Loan
+
+        loan = Loan.personal_loan(
+            principal=Money.from_float(10000),
+            annual_rate=InterestRate.from_percent(12.0),
+            term_months=12,
+            origination_date=date(2025, 1, 1),
+        )
+
+        # Buy at 95% of par
+        ytm = loan.yield_to_maturity(price=95.0)
+
+        # Should exceed coupon rate
+        assert ytm > 0.12
+
+    def test_ytm_at_premium(self):
+        """Test YTM below coupon when bought at premium."""
+        from credkit.instruments import Loan
+
+        loan = Loan.personal_loan(
+            principal=Money.from_float(10000),
+            annual_rate=InterestRate.from_percent(12.0),
+            term_months=12,
+            origination_date=date(2025, 1, 1),
+        )
+
+        # Buy at 105% of par
+        ytm = loan.yield_to_maturity(price=105.0)
+
+        # Should be below coupon rate
+        assert ytm < 0.12
+
+    def test_ytm_with_prepayment(self):
+        """Test YTM with prepayment assumptions."""
+        from credkit.behavior import PrepaymentCurve
+        from credkit.instruments import Loan
+
+        loan = Loan.personal_loan(
+            principal=Money.from_float(10000),
+            annual_rate=InterestRate.from_percent(12.0),
+            term_months=36,
+            origination_date=date(2025, 1, 1),
+        )
+
+        # YTM without prepayment
+        ytm_no_prepay = loan.yield_to_maturity()
+
+        # YTM with 20% CPR prepayment
+        cpr = PrepaymentCurve.constant_cpr(0.20)
+        ytm_with_prepay = loan.yield_to_maturity(prepayment_curve=cpr)
+
+        # Both should be around 12% at par, but may differ slightly
+        # due to timing differences from prepayments
+        assert abs(ytm_no_prepay - 0.12) < 0.01
+        assert abs(ytm_with_prepay - 0.12) < 0.02
+
+    def test_ytm_with_default_curve(self):
+        """Test YTM with default curve reduces yield."""
+        from credkit.behavior import DefaultCurve
+        from credkit.instruments import Loan
+
+        loan = Loan.personal_loan(
+            principal=Money.from_float(10000),
+            annual_rate=InterestRate.from_percent(12.0),
+            term_months=12,
+            origination_date=date(2025, 1, 1),
+        )
+
+        # YTM without defaults
+        ytm_no_default = loan.yield_to_maturity()
+
+        # YTM with 5% CDR - should be lower due to expected losses
+        default_curve = DefaultCurve.constant_cdr(0.05)
+        ytm_with_default = loan.yield_to_maturity(default_curve=default_curve)
+
+        # Default curve reduces expected cash flows, lowering yield
+        assert ytm_with_default < ytm_no_default
+        # With 5% CDR, yield should be meaningfully reduced
+        assert ytm_with_default < 0.10
+
+    def test_ytm_with_prepayment_and_default(self):
+        """Test YTM with both prepayment and default curves."""
+        from credkit.behavior import DefaultCurve, PrepaymentCurve
+        from credkit.instruments import Loan
+
+        loan = Loan.personal_loan(
+            principal=Money.from_float(10000),
+            annual_rate=InterestRate.from_percent(12.0),
+            term_months=36,
+            origination_date=date(2025, 1, 1),
+        )
+
+        prepay_curve = PrepaymentCurve.constant_cpr(0.10)
+        default_curve = DefaultCurve.constant_cdr(0.02)
+
+        # Combined yield should be less than yield with just prepayments
+        ytm_prepay_only = loan.yield_to_maturity(prepayment_curve=prepay_curve)
+        ytm_combined = loan.yield_to_maturity(
+            prepayment_curve=prepay_curve, default_curve=default_curve
+        )
+
+        # Adding defaults should reduce yield
+        assert ytm_combined < ytm_prepay_only

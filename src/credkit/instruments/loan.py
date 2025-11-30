@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import TYPE_CHECKING
 
+from ..behavior import PrepaymentCurve, DefaultCurve, LossGivenDefault
 from ..cashflow import CashFlowSchedule
 from ..money import InterestRate, Money
 from ..temporal import (
@@ -78,7 +79,9 @@ class Loan:
 
         # Validate rate (can be zero, but not negative)
         if self.annual_rate.rate < 0:
-            raise ValueError(f"Annual rate must be non-negative, got {self.annual_rate}")
+            raise ValueError(
+                f"Annual rate must be non-negative, got {self.annual_rate}"
+            )
 
         # Validate term
         term_days = self.term.to_days(approximate=True)
@@ -302,7 +305,9 @@ class Loan:
         num_payments = int(term_years * self.payment_frequency.payments_per_year)
 
         if num_payments <= 0:
-            raise ValueError(f"Invalid term/frequency combination: results in {num_payments} payments")
+            raise ValueError(
+                f"Invalid term/frequency combination: results in {num_payments} payments"
+            )
 
         return num_payments
 
@@ -326,7 +331,9 @@ class Loan:
 
         match self.amortization_type:
             case AmortizationType.LEVEL_PAYMENT:
-                return calculate_level_payment(self.principal, periodic_rate, num_payments)
+                return calculate_level_payment(
+                    self.principal, periodic_rate, num_payments
+                )
 
             case AmortizationType.LEVEL_PRINCIPAL:
                 # First payment is highest: principal/n + interest on full balance
@@ -358,7 +365,9 @@ class Loan:
             start_date = self.first_payment_date
         else:
             # Default first payment is one period after origination
-            start_date = self.payment_frequency.period.add_to_date(self.origination_date)
+            start_date = self.payment_frequency.period.add_to_date(
+                self.origination_date
+            )
 
         # For bullet loans, maturity is end of term from origination
         if self.amortization_type == AmortizationType.BULLET:
@@ -399,7 +408,9 @@ class Loan:
             start_date = self.first_payment_date
         else:
             # Default: one period after origination
-            start_date = self.payment_frequency.period.add_to_date(self.origination_date)
+            start_date = self.payment_frequency.period.add_to_date(
+                self.origination_date
+            )
 
         # Handle bullet loans separately
         if self.amortization_type == AmortizationType.BULLET:
@@ -450,7 +461,9 @@ class Loan:
                 )
 
             case _:
-                raise ValueError(f"Unsupported amortization type: {self.amortization_type}")
+                raise ValueError(
+                    f"Unsupported amortization type: {self.amortization_type}"
+                )
 
     def total_interest(self) -> Money:
         """
@@ -520,7 +533,7 @@ class Loan:
     def apply_default(
         self,
         default_date: date,
-        lgd: "LossGivenDefault",  # type: ignore
+        lgd: LossGivenDefault,  # type: ignore
     ) -> tuple[CashFlowSchedule, Money]:
         """
         Generate schedule with a default event.
@@ -542,7 +555,10 @@ class Loan:
             >>> lgd = LossGivenDefault.from_percent(40.0, Period(12, TimeUnit.MONTHS))
             >>> scenario, loss = loan.apply_default(date(2026, 1, 1), lgd)
         """
-        from ..behavior.adjustments import apply_default_scenario, calculate_outstanding_balance
+        from ..behavior.adjustments import (
+            apply_default_scenario,
+            calculate_outstanding_balance,
+        )
 
         base_schedule = self.generate_schedule()
         outstanding = calculate_outstanding_balance(base_schedule, default_date)
@@ -597,6 +613,57 @@ class Loan:
             total_payments=self.calculate_number_of_payments(),
             curve=prepayment_curve,
             calendar=self.calendar,
+        )
+
+    def yield_to_maturity(
+        self,
+        price: float = 100.0,
+        prepayment_curve: PrepaymentCurve | None = None,
+        default_curve: DefaultCurve | None = None,
+    ) -> float:
+        """
+        Calculate yield to maturity given price and performance assumptions.
+
+        Computes the XIRR (annualized internal rate of return) for an investor
+        purchasing a loan at a given price, accounting for expected prepayment
+        and default behavior.
+
+        The default curve models expected cash flow reductions using survival
+        probability: each payment is scaled by the cumulative probability that
+        the loan has not defaulted by that payment date.
+
+        Args:
+            price: Purchase price as percentage of par (100.0 = par)
+            prepayment_curve: Expected prepayment behavior (CPR curve)
+            default_curve: Expected default behavior (CDR curve)
+
+        Returns:
+            Annual IRR as decimal (e.g., 0.12 for 12%)
+
+        Example:
+            >>> loan = Loan.personal_loan(Money.from_float(10000), ...)
+            >>> loan.yield_to_maturity()  # YTM at par
+            >>> loan.yield_to_maturity(price=98.5)  # bought at 98.5% of principal
+            >>> loan.yield_to_maturity(price=102.0)  # bought at 2% premium
+        """
+        # Convert price percentage to Money amount
+        purchase_amount = Money(
+            amount=self.principal.amount * price / 100.0,
+            currency=self.principal.currency,
+        )
+
+        # Generate expected cash flows with prepayment adjustments
+        schedule = self.expected_cashflows(prepayment_curve=prepayment_curve)
+
+        # Apply default curve if provided
+        if default_curve is not None:
+            from ..behavior import apply_default_curve_simple
+
+            schedule = apply_default_curve_simple(schedule, default_curve)
+
+        return schedule.xirr(
+            initial_outflow=purchase_amount,
+            outflow_date=self.origination_date,
         )
 
     def __str__(self) -> str:

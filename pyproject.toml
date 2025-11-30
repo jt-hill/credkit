@@ -1,6 +1,6 @@
 [project]
 name = "credkit"
-version = "0.4.1"
+version = "0.4.2"
 description = "An open credit modeling tool kit"
 readme = "README.md"
 license = { text = "AGPL-3.0-only" }
@@ -8,7 +8,7 @@ authors = [
   { name = "jt-hill", email = "13084189+jt-hill@users.noreply.github.com" },
 ]
 requires-python = ">=3.13"
-dependencies = []
+dependencies = ["pyxirr>=0.10"]
 
 [build-system]
 requires = ["uv_build>=0.8.18,<0.9.0"]

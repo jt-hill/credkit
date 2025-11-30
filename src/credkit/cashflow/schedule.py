@@ -2,8 +2,10 @@
 
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from typing import Iterator, Self
+
+import pyxirr
 
 from ..money import Money
 from ..temporal import PaymentFrequency, Period
@@ -341,6 +343,63 @@ class CashFlowSchedule:
         if len(self.cash_flows) == 0:
             return None
         return (self.earliest_date(), self.latest_date())  # type: ignore
+
+    # Yield calculation methods
+
+    def to_arrays(self) -> tuple[list[date], list[float]]:
+        """
+        Extract dates and amounts as lists for external calculations.
+
+        Returns:
+            Tuple of (dates, amounts) where dates is list[date] and amounts is list[float]
+
+        Example:
+            >>> dates, amounts = schedule.to_arrays()
+            >>> # Use with external XIRR libraries
+        """
+        dates = [cf.date for cf in self.cash_flows]
+        amounts = [cf.amount.amount for cf in self.cash_flows]
+        return dates, amounts
+
+    def xirr(self, initial_outflow: Money, outflow_date: date | None = None) -> float:
+        """
+        Calculate XIRR (internal rate of return) for this schedule.
+
+        XIRR is the annualized rate that makes the net present value of all
+        cash flows (including the initial investment) equal to zero.
+
+        Args:
+            initial_outflow: The initial investment (positive value, will be negated)
+            outflow_date: Date of initial outflow (defaults to day before first cash flow)
+
+        Returns:
+            Annual IRR as decimal (e.g., 0.12 for 12%)
+
+        Raises:
+            ValueError: If schedule is empty
+
+        Example:
+            >>> loan = Loan.personal_loan(principal=Money.from_float(10000), ...)
+            >>> schedule = loan.generate_schedule()
+            >>> yield_rate = schedule.xirr(initial_outflow=loan.principal)
+            >>> print(f"Yield: {yield_rate:.2%}")
+        """
+        if len(self.cash_flows) == 0:
+            raise ValueError("Cannot calculate XIRR for empty schedule")
+
+        dates, amounts = self.to_arrays()
+
+        # Prepend initial outflow
+        if outflow_date is None:
+            outflow_date = dates[0] - timedelta(days=1)
+
+        all_dates = [outflow_date] + dates
+        all_amounts = [-initial_outflow.amount] + amounts
+
+        result = pyxirr.xirr(all_dates, all_amounts)
+        if result is None:
+            raise ValueError("XIRR calculation did not converge")
+        return result
 
     # String representation
 
