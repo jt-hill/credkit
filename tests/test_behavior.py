@@ -17,6 +17,7 @@ from credkit import (
     apply_prepayment_scenario,
     apply_prepayment_curve,
     apply_default_scenario,
+    apply_default_curve_simple,
     calculate_outstanding_balance,
 )
 from credkit.cashflow import CashFlowType
@@ -422,6 +423,54 @@ class TestScheduleAdjustments:
         recovery_date = lgd.recovery_lag.add_to_date(default_date)
         recovery_flows = [cf for cf in adjusted.cash_flows if cf.date == recovery_date and cf.type == CashFlowType.PRINCIPAL]
         assert len(recovery_flows) > 0
+
+    def test_apply_default_curve_simple(self, simple_loan):
+        """Test applying default curve to reduce expected cash flows."""
+        schedule = simple_loan.generate_schedule()
+        cdr_curve = DefaultCurve.constant_cdr(0.02)  # 2% CDR
+
+        adjusted = apply_default_curve_simple(schedule, cdr_curve)
+
+        # Adjusted schedule should have flows scaled by survival probability
+        # With 2% CDR, survival decays over time
+
+        # Total expected cash flows should be less than original
+        original_total = schedule.total_amount()
+        adjusted_total = adjusted.total_amount()
+
+        # Adjusted should be less (accounting for defaults)
+        assert adjusted_total < original_total
+
+        # But not zero - most flows should survive
+        assert adjusted_total > original_total * 0.5
+
+    def test_apply_default_curve_simple_zero_cdr(self, simple_loan):
+        """Test that zero CDR returns flows unchanged."""
+        schedule = simple_loan.generate_schedule()
+        cdr_curve = DefaultCurve.constant_cdr(0.0)  # 0% CDR
+
+        adjusted = apply_default_curve_simple(schedule, cdr_curve)
+
+        # With zero CDR, survival probability is 1.0 for all months
+        # So flows should be unchanged
+        original_total = schedule.total_amount()
+        adjusted_total = adjusted.total_amount()
+
+        assert abs(original_total.amount - adjusted_total.amount) < 0.01
+
+    def test_apply_default_curve_simple_high_cdr(self, simple_loan):
+        """Test that high CDR significantly reduces expected flows."""
+        schedule = simple_loan.generate_schedule()
+        cdr_curve = DefaultCurve.constant_cdr(0.20)  # 20% CDR
+
+        adjusted = apply_default_curve_simple(schedule, cdr_curve)
+
+        original_total = schedule.total_amount()
+        adjusted_total = adjusted.total_amount()
+
+        # With 20% CDR, expect significant reduction
+        # After 5 years: survival ~ (1-0.20)^5 = 0.328
+        assert adjusted_total < original_total * 0.7
 
 
 class TestLoanBehavioralMethods:

@@ -12,9 +12,9 @@ from datetime import date
 
 from ..cashflow import CashFlow, CashFlowSchedule, CashFlowType
 from ..money import Money
-from .default import DefaultCurve, DefaultRate
+from .default import DefaultCurve
 from .loss import LossGivenDefault
-from .prepayment import PrepaymentCurve, PrepaymentRate
+from .prepayment import PrepaymentCurve
 
 
 def calculate_outstanding_balance(
@@ -40,7 +40,9 @@ def calculate_outstanding_balance(
         >>> balance = calculate_outstanding_balance(schedule, date(2025, 1, 1))
     """
     # Get all principal flows on or before as_of_date
-    principal_flows = schedule.get_principal_flows().filter_by_date_range(end=as_of_date)
+    principal_flows = schedule.get_principal_flows().filter_by_date_range(
+        end=as_of_date
+    )
 
     if len(principal_flows) == 0:
         # No principal payments yet - return original principal
@@ -111,7 +113,9 @@ def apply_prepayment_scenario(
     from ..instruments import AmortizationType
 
     if prepayment_amount.is_negative():
-        raise ValueError(f"prepayment_amount must be non-negative, got {prepayment_amount}")
+        raise ValueError(
+            f"prepayment_amount must be non-negative, got {prepayment_amount}"
+        )
 
     if prepayment_amount.is_zero():
         return schedule
@@ -122,6 +126,7 @@ def apply_prepayment_scenario(
 
     # Calculate outstanding balance just before prepayment
     from datetime import timedelta
+
     day_before = prepayment_date - timedelta(days=1)
     balance_before = calculate_outstanding_balance(schedule, day_before)
 
@@ -147,7 +152,8 @@ def apply_prepayment_scenario(
 
     # Get principal flows after prepayment to determine remaining payments
     principal_flows_after = [
-        cf for cf in schedule.get_principal_flows().cash_flows
+        cf
+        for cf in schedule.get_principal_flows().cash_flows
         if cf.date > prepayment_date
     ]
 
@@ -241,7 +247,9 @@ def apply_prepayment_curve(
     periods_per_year = float(payment_frequency.payments_per_year)
     periodic_rate = annual_rate / periods_per_year if periods_per_year > 0 else 0.0
 
-    while remaining_payments > 0 and current_balance > Money.zero(starting_balance.currency):
+    while remaining_payments > 0 and current_balance > Money.zero(
+        starting_balance.currency
+    ):
         # Generate payment for this period using re-amortization
         period_schedule = reamortize_loan(
             remaining_balance=current_balance,
@@ -255,7 +263,9 @@ def apply_prepayment_curve(
         )
 
         # Get this period's flows (first payment only)
-        period_flows = [cf for cf in period_schedule.cash_flows if cf.date == current_date]
+        period_flows = [
+            cf for cf in period_schedule.cash_flows if cf.date == current_date
+        ]
 
         # Add scheduled principal and interest
         for cf in period_flows:
@@ -263,7 +273,8 @@ def apply_prepayment_curve(
 
         # Calculate balance after scheduled payment
         scheduled_principal = sum(
-            cf.amount.amount for cf in period_flows
+            cf.amount.amount
+            for cf in period_flows
             if cf.type in (CashFlowType.PRINCIPAL, CashFlowType.BALLOON)
         )
         balance_after_scheduled = current_balance.amount - scheduled_principal
@@ -273,8 +284,7 @@ def apply_prepayment_curve(
         if smm > 0 and balance_after_scheduled > 0:
             prepayment_amount_decimal = balance_after_scheduled * smm
             prepayment_amount = Money(
-                amount=prepayment_amount_decimal,
-                currency=current_balance.currency
+                amount=prepayment_amount_decimal, currency=current_balance.currency
             )
 
             if prepayment_amount > Money.zero(starting_balance.currency):
@@ -290,8 +300,7 @@ def apply_prepayment_curve(
 
         # Update for next period
         current_balance = Money(
-            amount=balance_after_scheduled,
-            currency=starting_balance.currency
+            amount=balance_after_scheduled, currency=starting_balance.currency
         )
 
         # Move to next payment date
@@ -363,41 +372,74 @@ def apply_default_scenario(
 
 def apply_default_curve_simple(
     schedule: CashFlowSchedule,
-    starting_balance: Money,
     curve: DefaultCurve,
-    lgd: LossGivenDefault,
 ) -> CashFlowSchedule:
     """
     Apply expected defaults based on CDR curve (simplified model).
 
-    This is a simplified implementation that reduces scheduled cash flows
-    by expected default amounts. Does not add explicit default/recovery flows.
+    Reduces scheduled cash flows by survival probability. The model tracks
+    cumulative survival probability by month:
+    - Survival(n) = Product of (1 - MDR_i) for i = 1 to n
+    - Expected flow at month n = Scheduled flow * Survival(n)
 
-    For more accurate modeling, use apply_default_scenario() for specific events
-    or build a full portfolio model.
+    This models the expected value of cash flows given the probability that
+    the loan has not defaulted by each payment date.
+
+    For deterministic scenario modeling, use apply_default_scenario() instead.
+    Recovery modeling should be handled separately.
 
     Args:
         schedule: Original cash flow schedule
-        starting_balance: Outstanding balance at start
         curve: Default curve to apply
-        lgd: Loss given default model
 
     Returns:
-        Schedule with flows reduced by expected defaults
+        Schedule with flows scaled by survival probability
 
     Example:
         >>> cdr_curve = DefaultCurve.constant_cdr(0.02)
-        >>> lgd = LossGivenDefault.from_percent(40.0)
-        >>> adjusted = apply_default_curve_simple(schedule, loan.principal, cdr_curve, lgd)
+        >>> adjusted = apply_default_curve_simple(schedule, cdr_curve)
     """
-    # This is a placeholder for a more sophisticated implementation
-    # For now, return schedule unchanged with a note
-    # Full implementation would require tracking survival probabilities through time
+    if len(schedule) == 0:
+        return schedule
 
-    # TODO: Implement full expected default modeling
-    # Would need to:
-    # 1. Track cumulative survival probability by month
-    # 2. Reduce each flow by (1 - survival_prob)
-    # 3. Add expected loss/recovery flows
+    currency = schedule.cash_flows[0].amount.currency
 
-    return schedule
+    # Build mapping of dates to month numbers
+    # Group cash flows by date and assign month numbers based on order
+    unique_dates = sorted(set(cf.date for cf in schedule.cash_flows))
+    date_to_month = {d: i + 1 for i, d in enumerate(unique_dates)}
+
+    # Calculate survival probability for each month
+    # Survival(n) = Product of (1 - MDR_i) for i = 1 to n
+    max_month = len(unique_dates)
+    survival_by_month: dict[int, float] = {}
+    cumulative_survival = 1.0
+
+    for month in range(1, max_month + 1):
+        mdr = curve.mdr_at_month(month)
+        cumulative_survival *= 1.0 - mdr
+        survival_by_month[month] = cumulative_survival
+
+    # Build adjusted cash flows
+    new_flows: list[CashFlow] = []
+
+    for cf in schedule.cash_flows:
+        month = date_to_month[cf.date]
+        survival_prob = survival_by_month[month]
+
+        # Scale cash flow by survival probability
+        adjusted_amount = Money(
+            amount=cf.amount.amount * survival_prob,
+            currency=currency,
+        )
+
+        new_flows.append(
+            CashFlow(
+                date=cf.date,
+                amount=adjusted_amount,
+                type=cf.type,
+                description=cf.description,
+            )
+        )
+
+    return CashFlowSchedule.from_list(new_flows, sort=True)

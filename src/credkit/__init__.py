@@ -51,6 +51,7 @@ from .behavior import (
     apply_prepayment_scenario,
     apply_prepayment_curve,
     apply_default_scenario,
+    apply_default_curve_simple,
     calculate_outstanding_balance,
 )
 
@@ -90,7 +91,8 @@ __all__ = [
     "DefaultCurve",
     "LossGivenDefault",
     "apply_prepayment_scenario",
-    "apply_prepayment_curve_simple",
+    "apply_prepayment_curve",
     "apply_default_scenario",
+    "apply_default_curve_simple",
     "calculate_outstanding_balance",
 ]

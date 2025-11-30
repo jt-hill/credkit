@@ -35,6 +35,9 @@ class CashFlowType(Enum):
     BALLOON = "Balloon"
     """Large final payment (common in bullet structures)."""
 
+    RECOVERY = "Recovery"
+    """Post-default recovery proceeds from collateral liquidation or collections."""
+
     OTHER = "Other"
     """Other cash flows not fitting standard categories."""
 

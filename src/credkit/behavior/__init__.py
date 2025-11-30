@@ -13,6 +13,7 @@ Design approach:
 """
 
 from .adjustments import (
+    apply_default_curve_simple,
     apply_default_scenario,
     apply_prepayment_curve,
     apply_prepayment_scenario,
@@ -35,5 +36,6 @@ __all__ = [
     "apply_prepayment_scenario",
     "apply_prepayment_curve",
     "apply_default_scenario",
+    "apply_default_curve_simple",
     "calculate_outstanding_balance",
 ]

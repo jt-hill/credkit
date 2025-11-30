@@ -1,6 +1,6 @@
 [project]
 name = "credkit"
-version = "0.4.0"
+version = "0.4.1"
 description = "An open credit modeling tool kit"
 readme = "README.md"
 license = { text = "AGPL-3.0-only" }
