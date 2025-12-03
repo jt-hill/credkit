@@ -683,3 +683,219 @@ class TestYieldToMaturity:
 
         # Adding defaults should reduce yield
         assert ytm_combined < ytm_prepay_only
+
+
+class TestAnalyticsMetrics:
+    """Tests for WAL, duration, and convexity calculations."""
+
+    def test_wal_single_payment(self):
+        """Test WAL with single principal payment at 1 year."""
+        cf = CashFlow(date(2026, 1, 1), Money.from_float(1000), CashFlowType.PRINCIPAL)
+        schedule = CashFlowSchedule(cash_flows=(cf,))
+
+        wal = schedule.weighted_average_life(valuation_date=date(2025, 1, 1))
+
+        # Single payment at 1 year should have WAL = 1.0
+        assert abs(wal - 1.0) < 0.01
+
+    def test_wal_multiple_payments(self):
+        """Test WAL with multiple principal payments."""
+        # Equal payments at 1, 2, and 3 years
+        cf1 = CashFlow(date(2026, 1, 1), Money.from_float(1000), CashFlowType.PRINCIPAL)
+        cf2 = CashFlow(date(2027, 1, 1), Money.from_float(1000), CashFlowType.PRINCIPAL)
+        cf3 = CashFlow(date(2028, 1, 1), Money.from_float(1000), CashFlowType.PRINCIPAL)
+        schedule = CashFlowSchedule(cash_flows=(cf1, cf2, cf3))
+
+        wal = schedule.weighted_average_life(valuation_date=date(2025, 1, 1))
+
+        # Equal payments at 1, 2, 3 years: WAL = (1*1000 + 2*1000 + 3*1000) / 3000 = 2.0
+        assert abs(wal - 2.0) < 0.01
+
+    def test_wal_ignores_interest_flows(self):
+        """Test that WAL only considers principal flows."""
+        cf1 = CashFlow(date(2026, 1, 1), Money.from_float(1000), CashFlowType.PRINCIPAL)
+        cf2 = CashFlow(date(2025, 6, 1), Money.from_float(50), CashFlowType.INTEREST)  # Earlier interest
+        schedule = CashFlowSchedule(cash_flows=(cf1, cf2))
+
+        wal = schedule.weighted_average_life(valuation_date=date(2025, 1, 1))
+
+        # Should ignore interest, only consider principal at 1 year
+        assert abs(wal - 1.0) < 0.01
+
+    def test_wal_includes_prepayment_flows(self):
+        """Test that WAL includes prepayment flows as principal."""
+        cf1 = CashFlow(date(2026, 1, 1), Money.from_float(500), CashFlowType.PRINCIPAL)
+        cf2 = CashFlow(date(2026, 1, 1), Money.from_float(500), CashFlowType.PREPAYMENT)
+        schedule = CashFlowSchedule(cash_flows=(cf1, cf2))
+
+        wal = schedule.weighted_average_life(valuation_date=date(2025, 1, 1))
+
+        # Both flows at 1 year, WAL = 1.0
+        assert abs(wal - 1.0) < 0.01
+
+    def test_wal_no_principal_raises(self):
+        """Test that WAL raises error when no principal flows."""
+        cf = CashFlow(date(2025, 1, 1), Money.from_float(50), CashFlowType.INTEREST)
+        schedule = CashFlowSchedule(cash_flows=(cf,))
+
+        with pytest.raises(ValueError, match="no principal flows"):
+            schedule.weighted_average_life()
+
+    def test_macaulay_duration_zero_coupon(self):
+        """Test that Macaulay duration equals maturity for zero-coupon."""
+        # Single payment at 5 years (like a zero-coupon bond)
+        cf = CashFlow(date(2030, 1, 1), Money.from_float(1000), CashFlowType.PRINCIPAL)
+        schedule = CashFlowSchedule(cash_flows=(cf,))
+
+        rate = InterestRate.from_percent(5.0)
+        curve = FlatDiscountCurve(rate, date(2025, 1, 1))
+
+        mac_dur = schedule.macaulay_duration(curve)
+
+        # Zero-coupon: Macaulay duration should equal maturity (5 years)
+        assert abs(mac_dur - 5.0) < 0.02
+
+    def test_macaulay_duration_less_than_maturity(self):
+        """Test that duration is less than maturity for coupon-paying."""
+        # Annual payments over 5 years
+        flows = [
+            CashFlow(date(2025 + i, 1, 1), Money.from_float(100), CashFlowType.INTEREST)
+            for i in range(1, 6)
+        ]
+        flows.append(CashFlow(date(2030, 1, 1), Money.from_float(1000), CashFlowType.PRINCIPAL))
+        schedule = CashFlowSchedule(cash_flows=tuple(flows))
+
+        rate = InterestRate.from_percent(5.0)
+        curve = FlatDiscountCurve(rate, date(2025, 1, 1))
+
+        mac_dur = schedule.macaulay_duration(curve)
+
+        # With coupons, duration should be less than 5 years
+        assert mac_dur < 5.0
+        assert mac_dur > 4.0  # But not too much less
+
+    def test_macaulay_duration_empty_schedule_raises(self):
+        """Test that duration raises error for empty schedule."""
+        schedule = CashFlowSchedule.empty()
+        rate = InterestRate.from_percent(5.0)
+        curve = FlatDiscountCurve(rate, date(2025, 1, 1))
+
+        with pytest.raises(ValueError, match="schedule is empty"):
+            schedule.macaulay_duration(curve)
+
+    def test_modified_duration_less_than_macaulay(self):
+        """Test that modified duration < Macaulay duration for positive rates."""
+        cf = CashFlow(date(2030, 1, 1), Money.from_float(1000), CashFlowType.PRINCIPAL)
+        schedule = CashFlowSchedule(cash_flows=(cf,))
+
+        rate = InterestRate.from_percent(5.0)
+        curve = FlatDiscountCurve(rate, date(2025, 1, 1))
+
+        mac_dur = schedule.macaulay_duration(curve)
+        mod_dur = schedule.modified_duration(curve)
+
+        # Modified = Macaulay / (1 + y/k), so modified < Macaulay
+        assert mod_dur < mac_dur
+
+    def test_modified_duration_approximates_price_change(self):
+        """Test that duration approximates actual price change."""
+        # 5-year zero coupon
+        cf = CashFlow(date(2030, 1, 1), Money.from_float(1000), CashFlowType.PRINCIPAL)
+        schedule = CashFlowSchedule(cash_flows=(cf,))
+
+        rate = InterestRate.from_percent(5.0)
+        curve = FlatDiscountCurve(rate, date(2025, 1, 1))
+
+        pv_base = schedule.present_value(curve).amount
+        mod_dur = schedule.modified_duration(curve)
+
+        # Shock rate by 100 bps
+        rate_up = InterestRate.from_percent(6.0)
+        curve_up = FlatDiscountCurve(rate_up, date(2025, 1, 1))
+        pv_up = schedule.present_value(curve_up).amount
+
+        # Actual price change percentage
+        actual_change = (pv_up - pv_base) / pv_base
+
+        # Duration approximation: -D_mod * dy
+        approx_change = -mod_dur * 0.01
+
+        # Should be close (within 0.5% for this simple case)
+        assert abs(actual_change - approx_change) < 0.005
+
+    def test_convexity_positive(self):
+        """Test that convexity is positive for normal cash flows."""
+        cf = CashFlow(date(2030, 1, 1), Money.from_float(1000), CashFlowType.PRINCIPAL)
+        schedule = CashFlowSchedule(cash_flows=(cf,))
+
+        rate = InterestRate.from_percent(5.0)
+        curve = FlatDiscountCurve(rate, date(2025, 1, 1))
+
+        conv = schedule.convexity(curve)
+
+        # Convexity should be positive
+        assert conv > 0
+
+    def test_convexity_improves_price_estimate(self):
+        """Test that convexity improves price change estimate."""
+        # 10-year zero coupon for more convexity effect
+        cf = CashFlow(date(2035, 1, 1), Money.from_float(1000), CashFlowType.PRINCIPAL)
+        schedule = CashFlowSchedule(cash_flows=(cf,))
+
+        rate = InterestRate.from_percent(5.0)
+        curve = FlatDiscountCurve(rate, date(2025, 1, 1))
+
+        pv_base = schedule.present_value(curve).amount
+        mod_dur = schedule.modified_duration(curve)
+        conv = schedule.convexity(curve)
+
+        # Shock rate by 200 bps (larger shock to show convexity effect)
+        rate_up = InterestRate.from_percent(7.0)
+        curve_up = FlatDiscountCurve(rate_up, date(2025, 1, 1))
+        pv_up = schedule.present_value(curve_up).amount
+
+        actual_change = (pv_up - pv_base) / pv_base
+        dy = 0.02
+
+        # Duration-only estimate
+        dur_only_estimate = -mod_dur * dy
+
+        # Duration + convexity estimate
+        dur_conv_estimate = -mod_dur * dy + 0.5 * conv * dy**2
+
+        # Convexity estimate should be closer to actual
+        dur_only_error = abs(actual_change - dur_only_estimate)
+        dur_conv_error = abs(actual_change - dur_conv_estimate)
+
+        assert dur_conv_error < dur_only_error
+
+    def test_convexity_empty_schedule_raises(self):
+        """Test that convexity raises error for empty schedule."""
+        schedule = CashFlowSchedule.empty()
+        rate = InterestRate.from_percent(5.0)
+        curve = FlatDiscountCurve(rate, date(2025, 1, 1))
+
+        with pytest.raises(ValueError, match="schedule is empty"):
+            schedule.convexity(curve)
+
+    def test_metrics_with_zero_curve(self):
+        """Test that metrics work with ZeroCurve."""
+        cf = CashFlow(date(2030, 1, 1), Money.from_float(1000), CashFlowType.PRINCIPAL)
+        schedule = CashFlowSchedule(cash_flows=(cf,))
+
+        curve = ZeroCurve.from_rates(
+            valuation_date=date(2025, 1, 1),
+            rates=[
+                (date(2027, 1, 1), 0.04),
+                (date(2030, 1, 1), 0.05),
+            ],
+        )
+
+        # Should not raise errors
+        mac_dur = schedule.macaulay_duration(curve)
+        mod_dur = schedule.modified_duration(curve)
+        conv = schedule.convexity(curve)
+
+        assert mac_dur > 0
+        assert mod_dur > 0
+        assert conv > 0

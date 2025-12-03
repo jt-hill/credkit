@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from ..behavior import PrepaymentCurve, DefaultCurve, LossGivenDefault
 from ..cashflow import CashFlowSchedule
+from ..cashflow.discount import DiscountCurve
 from ..money import InterestRate, Money
 from ..temporal import (
     BusinessDayCalendar,
@@ -567,53 +568,58 @@ class Loan:
 
     def expected_cashflows(
         self,
-        prepayment_curve: "PrepaymentCurve | None" = None,  # type: ignore
+        prepayment_curve: PrepaymentCurve | None = None,
+        default_curve: DefaultCurve | None = None,
     ) -> CashFlowSchedule:
         """
-        Generate expected cash flows given behavioral assumptions with proper re-amortization.
+        Generate expected cash flows given behavioral assumptions.
 
-        Applies prepayment curve to generate schedule with expected prepayment
-        cash flows. Properly re-amortizes month-by-month, adjusting both principal
-        AND interest based on the evolving balance.
-
-        This provides accurate expected cash flow projections by re-amortizing
-        after each prepayment event.
+        Applies prepayment and/or default curves to generate expected cash flows.
+        Prepayments are applied with proper re-amortization (adjusting both
+        principal AND interest based on the evolving balance). Default curve
+        scales cash flows by survival probability.
 
         Args:
-            prepayment_curve: Prepayment curve to apply (optional)
+            prepayment_curve: Expected prepayment behavior (CPR curve)
+            default_curve: Expected default behavior (CDR curve)
 
         Returns:
-            Cash flow schedule with behavioral adjustments and re-amortization
+            Cash flow schedule with behavioral adjustments
 
         Example:
-            >>> from credkit.behavior import PrepaymentCurve
+            >>> from credkit.behavior import PrepaymentCurve, DefaultCurve
             >>> loan = Loan.mortgage(Money.from_float(300000), InterestRate.from_percent(6.5))
-            >>> cpr_curve = PrepaymentCurve.constant_cpr(0.10)
-            >>> expected = loan.expected_cashflows(prepayment_curve=cpr_curve)
+            >>> cpr = PrepaymentCurve.constant_cpr(0.10)
+            >>> cdr = DefaultCurve.constant_cdr(0.02)
+            >>> expected = loan.expected_cashflows(prepayment_curve=cpr, default_curve=cdr)
         """
-        from ..behavior.adjustments import apply_prepayment_curve
+        from ..behavior.adjustments import apply_default_curve_simple, apply_prepayment_curve
 
+        # Start with base or prepayment-adjusted schedule
         if prepayment_curve is None:
-            # No prepayment curve - return base schedule
-            return self.generate_schedule()
+            schedule = self.generate_schedule()
+        else:
+            first_payment_date = (
+                self.first_payment_date
+                if self.first_payment_date is not None
+                else self.payment_frequency.period.add_to_date(self.origination_date)
+            )
+            schedule = apply_prepayment_curve(
+                starting_balance=self.principal,
+                annual_rate=self.annual_rate.rate,
+                payment_frequency=self.payment_frequency,
+                amortization_type=self.amortization_type,
+                start_date=first_payment_date,
+                total_payments=self.calculate_number_of_payments(),
+                curve=prepayment_curve,
+                calendar=self.calendar,
+            )
 
-        # Generate expected cash flows with re-amortization
-        first_payment_date = (
-            self.first_payment_date
-            if self.first_payment_date is not None
-            else self.payment_frequency.period.add_to_date(self.origination_date)
-        )
+        # Apply default curve if provided
+        if default_curve is not None:
+            schedule = apply_default_curve_simple(schedule, default_curve)
 
-        return apply_prepayment_curve(
-            starting_balance=self.principal,
-            annual_rate=self.annual_rate.rate,
-            payment_frequency=self.payment_frequency,
-            amortization_type=self.amortization_type,
-            start_date=first_payment_date,
-            total_payments=self.calculate_number_of_payments(),
-            curve=prepayment_curve,
-            calendar=self.calendar,
-        )
+        return schedule
 
     def yield_to_maturity(
         self,
@@ -652,19 +658,111 @@ class Loan:
             currency=self.principal.currency,
         )
 
-        # Generate expected cash flows with prepayment adjustments
-        schedule = self.expected_cashflows(prepayment_curve=prepayment_curve)
-
-        # Apply default curve if provided
-        if default_curve is not None:
-            from ..behavior import apply_default_curve_simple
-
-            schedule = apply_default_curve_simple(schedule, default_curve)
+        # Generate expected cash flows with behavioral adjustments
+        schedule = self.expected_cashflows(
+            prepayment_curve=prepayment_curve,
+            default_curve=default_curve,
+        )
 
         return schedule.xirr(
             initial_outflow=purchase_amount,
             outflow_date=self.origination_date,
         )
+
+    # Analytics methods
+
+    def weighted_average_life(
+        self,
+        prepayment_curve: PrepaymentCurve | None = None,
+        default_curve: DefaultCurve | None = None,
+    ) -> float:
+        """
+        Calculate weighted average life (WAL) of the loan's principal payments.
+
+        WAL measures the average time to receive principal payments,
+        weighted by the principal amount. Applies behavioral curves if provided.
+
+        Args:
+            prepayment_curve: Expected prepayment behavior (optional)
+            default_curve: Expected default behavior (optional)
+
+        Returns:
+            WAL in years
+
+        Example:
+            >>> loan = Loan.mortgage(Money.from_float(300000), InterestRate.from_percent(6.5))
+            >>> loan.weighted_average_life()  # Base WAL
+            >>> loan.weighted_average_life(prepayment_curve=PrepaymentCurve.constant_cpr(0.10))
+        """
+        schedule = self.expected_cashflows(prepayment_curve, default_curve)
+        return schedule.weighted_average_life(valuation_date=self.origination_date)
+
+    def duration(
+        self,
+        discount_curve: DiscountCurve,
+        prepayment_curve: PrepaymentCurve | None = None,
+        default_curve: DefaultCurve | None = None,
+        modified: bool = True,
+    ) -> float:
+        """
+        Calculate duration of the loan (Macaulay or modified).
+
+        Duration measures the sensitivity of the loan's price to yield changes.
+        Applies behavioral curves if provided.
+
+        Args:
+            discount_curve: Curve for discounting cash flows
+            prepayment_curve: Expected prepayment behavior (optional)
+            default_curve: Expected default behavior (optional)
+            modified: If True (default), return modified duration;
+                     if False, return Macaulay duration
+
+        Returns:
+            Duration in years (Macaulay) or percentage sensitivity (modified)
+
+        Example:
+            >>> from credkit.cashflow import FlatDiscountCurve
+            >>> curve = FlatDiscountCurve(InterestRate.from_percent(5.0), loan.origination_date)
+            >>> loan.duration(curve)  # Modified duration at 5%
+            >>> loan.duration(curve, modified=False)  # Macaulay duration
+        """
+        schedule = self.expected_cashflows(prepayment_curve, default_curve)
+        if modified:
+            return schedule.modified_duration(discount_curve)
+        return schedule.macaulay_duration(discount_curve)
+
+    def convexity(
+        self,
+        discount_curve: DiscountCurve,
+        prepayment_curve: PrepaymentCurve | None = None,
+        default_curve: DefaultCurve | None = None,
+    ) -> float:
+        """
+        Calculate convexity of the loan cash flows.
+
+        Convexity measures the curvature of the price-yield relationship.
+        Used with duration for more accurate price change estimates.
+        Applies behavioral curves if provided.
+
+        Args:
+            discount_curve: Curve for discounting cash flows
+            prepayment_curve: Expected prepayment behavior (optional)
+            default_curve: Expected default behavior (optional)
+
+        Returns:
+            Convexity factor
+
+        Example:
+            >>> from credkit.cashflow import FlatDiscountCurve
+            >>> curve = FlatDiscountCurve(InterestRate.from_percent(5.0), loan.origination_date)
+            >>> conv = loan.convexity(curve)
+            >>> # Full price change estimate for 100bps increase:
+            >>> dy = 0.01
+            >>> mod_dur = loan.duration(curve)
+            >>> delta_p = -mod_dur * dy + 0.5 * conv * dy**2
+        """
+        schedule = self.expected_cashflows(prepayment_curve, default_curve)
+        return schedule.convexity(discount_curve)
 
     def __str__(self) -> str:
         return (

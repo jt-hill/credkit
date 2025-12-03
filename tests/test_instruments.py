@@ -619,3 +619,181 @@ class TestReamortizeLoan:
                 start_date=date(2025, 1, 1),
                 method=ReamortizationMethod.KEEP_MATURITY,
             )
+
+
+class TestLoanAnalytics:
+    """Tests for Loan analytics wrapper methods (WAL, duration, convexity)."""
+
+    def test_loan_wal_basic(self):
+        """Test basic WAL calculation on a loan."""
+        loan = Loan.personal_loan(
+            principal=Money.from_float(12000),
+            annual_rate=InterestRate.from_percent(12.0),
+            term_months=12,
+            origination_date=date(2025, 1, 1),
+        )
+
+        wal = loan.weighted_average_life()
+
+        # 12-month amortizing loan should have WAL around 0.5 years
+        # (weighted average of monthly principal payments)
+        assert wal > 0.4
+        assert wal < 0.7
+
+    def test_loan_wal_longer_term(self):
+        """Test that longer term loan has higher WAL."""
+        loan_short = Loan.personal_loan(
+            principal=Money.from_float(10000),
+            annual_rate=InterestRate.from_percent(10.0),
+            term_months=12,
+            origination_date=date(2025, 1, 1),
+        )
+        loan_long = Loan.personal_loan(
+            principal=Money.from_float(10000),
+            annual_rate=InterestRate.from_percent(10.0),
+            term_months=36,
+            origination_date=date(2025, 1, 1),
+        )
+
+        wal_short = loan_short.weighted_average_life()
+        wal_long = loan_long.weighted_average_life()
+
+        # Longer term should have higher WAL
+        assert wal_long > wal_short
+
+    def test_loan_wal_with_prepayment_curve(self):
+        """Test that prepayment reduces WAL."""
+        from credkit.behavior import PrepaymentCurve
+
+        loan = Loan.personal_loan(
+            principal=Money.from_float(10000),
+            annual_rate=InterestRate.from_percent(12.0),
+            term_months=36,
+            origination_date=date(2025, 1, 1),
+        )
+
+        wal_no_prepay = loan.weighted_average_life()
+
+        # 20% CPR should significantly reduce WAL
+        cpr_curve = PrepaymentCurve.constant_cpr(0.20)
+        wal_with_prepay = loan.weighted_average_life(prepayment_curve=cpr_curve)
+
+        # Prepayments should reduce WAL
+        assert wal_with_prepay < wal_no_prepay
+
+    def test_loan_duration_basic(self):
+        """Test basic duration calculation on a loan."""
+        from credkit.cashflow import FlatDiscountCurve
+
+        loan = Loan.personal_loan(
+            principal=Money.from_float(10000),
+            annual_rate=InterestRate.from_percent(12.0),
+            term_months=12,
+            origination_date=date(2025, 1, 1),
+        )
+
+        curve = FlatDiscountCurve(InterestRate.from_percent(10.0), loan.origination_date)
+
+        # Modified duration (default)
+        mod_dur = loan.duration(curve)
+
+        # Should be positive and less than 1 year for a 12-month loan
+        assert mod_dur > 0
+        assert mod_dur < 1.0
+
+    def test_loan_duration_macaulay_vs_modified(self):
+        """Test that Macaulay duration > modified duration."""
+        from credkit.cashflow import FlatDiscountCurve
+
+        loan = Loan.personal_loan(
+            principal=Money.from_float(10000),
+            annual_rate=InterestRate.from_percent(12.0),
+            term_months=24,
+            origination_date=date(2025, 1, 1),
+        )
+
+        curve = FlatDiscountCurve(InterestRate.from_percent(10.0), loan.origination_date)
+
+        mac_dur = loan.duration(curve, modified=False)
+        mod_dur = loan.duration(curve, modified=True)
+
+        # Macaulay > Modified for positive rates
+        assert mac_dur > mod_dur
+
+    def test_loan_convexity_basic(self):
+        """Test basic convexity calculation on a loan."""
+        from credkit.cashflow import FlatDiscountCurve
+
+        loan = Loan.personal_loan(
+            principal=Money.from_float(10000),
+            annual_rate=InterestRate.from_percent(12.0),
+            term_months=24,
+            origination_date=date(2025, 1, 1),
+        )
+
+        curve = FlatDiscountCurve(InterestRate.from_percent(10.0), loan.origination_date)
+
+        conv = loan.convexity(curve)
+
+        # Convexity should be positive
+        assert conv > 0
+
+    def test_loan_analytics_with_behavioral_curves(self):
+        """Test analytics with both prepayment and default curves."""
+        from credkit.behavior import DefaultCurve, PrepaymentCurve
+        from credkit.cashflow import FlatDiscountCurve
+
+        loan = Loan.personal_loan(
+            principal=Money.from_float(10000),
+            annual_rate=InterestRate.from_percent(12.0),
+            term_months=36,
+            origination_date=date(2025, 1, 1),
+        )
+
+        curve = FlatDiscountCurve(InterestRate.from_percent(10.0), loan.origination_date)
+        prep_curve = PrepaymentCurve.constant_cpr(0.10)
+        default_curve = DefaultCurve.constant_cdr(0.02)
+
+        # Should not raise errors with behavioral curves
+        wal = loan.weighted_average_life(
+            prepayment_curve=prep_curve, default_curve=default_curve
+        )
+        dur = loan.duration(
+            curve, prepayment_curve=prep_curve, default_curve=default_curve
+        )
+        conv = loan.convexity(
+            curve, prepayment_curve=prep_curve, default_curve=default_curve
+        )
+
+        assert wal > 0
+        assert dur > 0
+        assert conv > 0
+
+    def test_mortgage_analytics_integration(self):
+        """Test full analytics workflow on a mortgage."""
+        from credkit.cashflow import FlatDiscountCurve
+
+        loan = Loan.mortgage(
+            principal=Money.from_float(300000),
+            annual_rate=InterestRate.from_percent(6.5),
+            term_years=30,
+            origination_date=date(2025, 1, 1),
+        )
+
+        curve = FlatDiscountCurve(InterestRate.from_percent(6.0), loan.origination_date)
+
+        wal = loan.weighted_average_life()
+        mod_dur = loan.duration(curve)
+        mac_dur = loan.duration(curve, modified=False)
+        conv = loan.convexity(curve)
+
+        # 30-year mortgage should have WAL around 10-15 years
+        assert wal > 8
+        assert wal < 20
+
+        # Duration should be positive and meaningful
+        assert mod_dur > 5
+        assert mac_dur > mod_dur
+
+        # Convexity should be positive
+        assert conv > 0

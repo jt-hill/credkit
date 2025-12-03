@@ -8,9 +8,10 @@ from typing import Iterator, Self
 import pyxirr
 
 from ..money import Money
-from ..temporal import PaymentFrequency, Period
+from ..money.rate import CompoundingConvention
+from ..temporal import DayCountBasis, DayCountConvention, PaymentFrequency, Period
 from .cashflow import CashFlow, CashFlowType
-from .discount import DiscountCurve
+from .discount import DiscountCurve, FlatDiscountCurve, ZeroCurve
 
 
 @dataclass(frozen=True)
@@ -57,11 +58,6 @@ class CashFlowSchedule:
 
         Returns:
             CashFlowSchedule instance
-
-        Example:
-            >>> cf1 = CashFlow(date(2025, 1, 1), Money.from_float(1000), CashFlowType.PRINCIPAL)
-            >>> cf2 = CashFlow(date(2025, 2, 1), Money.from_float(1000), CashFlowType.PRINCIPAL)
-            >>> schedule = CashFlowSchedule.from_list([cf1, cf2])
         """
         if sort:
             sorted_flows = sorted(cash_flows, key=lambda cf: cf.date)
@@ -110,14 +106,13 @@ class CashFlowSchedule:
 
         Returns:
             New schedule with only matching cash flows
-
-        Example:
-            >>> schedule.filter_by_type(CashFlowType.PRINCIPAL, CashFlowType.INTEREST)
         """
         filtered = [cf for cf in self.cash_flows if cf.type in types]
         return CashFlowSchedule(cash_flows=tuple(filtered))
 
-    def filter_by_date_range(self, start: date | None = None, end: date | None = None) -> Self:
+    def filter_by_date_range(
+        self, start: date | None = None, end: date | None = None
+    ) -> Self:
         """
         Filter cash flows by date range.
 
@@ -142,7 +137,9 @@ class CashFlowSchedule:
 
     def get_principal_flows(self) -> Self:
         """Get only principal cash flows."""
-        return self.filter_by_type(CashFlowType.PRINCIPAL, CashFlowType.PREPAYMENT, CashFlowType.BALLOON)
+        return self.filter_by_type(
+            CashFlowType.PRINCIPAL, CashFlowType.PREPAYMENT, CashFlowType.BALLOON
+        )
 
     def get_interest_flows(self) -> Self:
         """Get only interest cash flows."""
@@ -167,6 +164,7 @@ class CashFlowSchedule:
         """
         if len(self.cash_flows) == 0:
             from ..money import USD
+
             return Money.zero(USD)
 
         total = self.cash_flows[0].amount
@@ -218,7 +216,10 @@ class CashFlowSchedule:
 
         # Group by (period_start_date, type)
         from collections import defaultdict
-        period_groups: dict[tuple[date, CashFlowType], list[CashFlow]] = defaultdict(list)
+
+        period_groups: dict[tuple[date, CashFlowType], list[CashFlow]] = defaultdict(
+            list
+        )
 
         # Find first date to establish period boundaries
         first_date = min(cf.date for cf in self.cash_flows)
@@ -231,7 +232,11 @@ class CashFlowSchedule:
 
             if period_length_days > 0:
                 period_number = days_diff // period_length_days
-                period_start = frequency.period.add_to_date(first_date) if period_number > 0 else first_date
+                period_start = (
+                    frequency.period.add_to_date(first_date)
+                    if period_number > 0
+                    else first_date
+                )
                 # Adjust for multiple periods
                 for _ in range(period_number - 1):
                     period_start = frequency.period.add_to_date(period_start)
@@ -257,7 +262,7 @@ class CashFlowSchedule:
                     date=latest_date,
                     amount=total,
                     type=cf_type,
-                    description=f"Aggregated {cf_type.value} ({len(flows)} flows)"
+                    description=f"Aggregated {cf_type.value} ({len(flows)} flows)",
                 )
             )
 
@@ -287,6 +292,7 @@ class CashFlowSchedule:
         """
         if len(self.cash_flows) == 0:
             from ..money import USD
+
             return Money.zero(USD)
 
         val_date = valuation_date if valuation_date else discount_curve.valuation_date
@@ -400,6 +406,259 @@ class CashFlowSchedule:
         if result is None:
             raise ValueError("XIRR calculation did not converge")
         return result
+
+    # Analytics methods
+
+    def weighted_average_life(
+        self,
+        valuation_date: date | None = None,
+        day_count: DayCountBasis | None = None,
+    ) -> float:
+        """
+        Calculate weighted average life (WAL) of principal flows.
+
+        WAL measures the average time to receive principal payments,
+        weighted by the principal amount. Only considers principal flows
+        (PRINCIPAL, PREPAYMENT, BALLOON types).
+
+        Formula: WAL = sum(t_i * Principal_i) / sum(Principal_i)
+
+        Args:
+            valuation_date: Reference date for time calculations
+                           (defaults to earliest cash flow date)
+            day_count: Day count convention for year fractions
+                      (defaults to ACT/365)
+
+        Returns:
+            WAL in years
+
+        Raises:
+            ValueError: If no principal flows in schedule
+
+        Example:
+            >>> schedule = loan.generate_schedule()
+            >>> wal = schedule.weighted_average_life()
+            >>> print(f"WAL: {wal:.2f} years")
+        """
+        principal_flows = self.get_principal_flows()
+        if len(principal_flows) == 0:
+            raise ValueError("Cannot calculate WAL: no principal flows in schedule")
+
+        # Use default day count if not provided
+        if day_count is None:
+            day_count = DayCountBasis(DayCountConvention.ACTUAL_365)
+
+        # Use earliest flow date as valuation date if not provided
+        if valuation_date is None:
+            valuation_date = self.earliest_date()
+
+        # Calculate weighted sum
+        weighted_sum = 0.0
+        total_principal = 0.0
+
+        for cf in principal_flows:
+            t = day_count.year_fraction(valuation_date, cf.date)
+            amount = cf.amount.amount
+            weighted_sum += t * amount
+            total_principal += amount
+
+        if total_principal <= 0:
+            raise ValueError(
+                "Cannot calculate WAL: total principal is zero or negative"
+            )
+
+        return weighted_sum / total_principal
+
+    def macaulay_duration(
+        self,
+        discount_curve: DiscountCurve,
+        valuation_date: date | None = None,
+    ) -> float:
+        """
+        Calculate Macaulay duration (PV-weighted average time to cash flows).
+
+        Macaulay duration measures the weighted average time to receive
+        all cash flows, where weights are the present values of each flow.
+
+        Formula: D_mac = sum(t_i * PV_i) / sum(PV_i)
+
+        Args:
+            discount_curve: Curve for discounting cash flows
+            valuation_date: Reference date for PV calculation
+                           (defaults to curve's valuation date)
+
+        Returns:
+            Macaulay duration in years
+
+        Raises:
+            ValueError: If schedule is empty
+            ValueError: If total PV is zero or negative
+
+        Example:
+            >>> curve = FlatDiscountCurve(InterestRate.from_percent(5.0), date(2024, 1, 1))
+            >>> mac_dur = schedule.macaulay_duration(curve)
+        """
+        if len(self.cash_flows) == 0:
+            raise ValueError("Cannot calculate duration: schedule is empty")
+
+        val_date = valuation_date if valuation_date else discount_curve.valuation_date
+
+        # Get day count from curve or default
+        if hasattr(discount_curve, "day_count"):
+            day_count = discount_curve.day_count
+        else:
+            day_count = DayCountBasis(DayCountConvention.ACTUAL_365)
+
+        weighted_sum = 0.0
+        total_pv = 0.0
+
+        for cf in self.cash_flows:
+            pv = cf.present_value(discount_curve, val_date)
+            t = day_count.year_fraction(val_date, cf.date)
+            weighted_sum += t * pv.amount
+            total_pv += pv.amount
+
+        if total_pv <= 0:
+            raise ValueError("Cannot calculate duration: total PV is zero or negative")
+
+        return weighted_sum / total_pv
+
+    def modified_duration(
+        self,
+        discount_curve: DiscountCurve,
+        valuation_date: date | None = None,
+    ) -> float:
+        """
+        Calculate modified duration (price sensitivity to yield changes).
+
+        Modified duration approximates the percentage price change for
+        a 1% change in yield: dP/P = -D_mod * dy
+
+        Formula: D_mod = D_mac / (1 + y/k)
+
+        Where k is the compounding frequency (periods per year).
+
+        Args:
+            discount_curve: Curve for discounting cash flows
+            valuation_date: Reference date for PV calculation
+                           (defaults to curve's valuation date)
+
+        Returns:
+            Modified duration as percentage change per 1% yield change
+            (e.g., 4.5 means price falls ~4.5% if yield rises 1%)
+
+        Raises:
+            ValueError: If schedule is empty
+            ValueError: If total PV is zero or negative
+
+        Example:
+            >>> curve = FlatDiscountCurve(InterestRate.from_percent(5.0), date(2024, 1, 1))
+            >>> mod_dur = schedule.modified_duration(curve)
+            >>> # Price change for 50bps rate increase:
+            >>> price_change_pct = -mod_dur * 0.50
+        """
+        mac_dur = self.macaulay_duration(discount_curve, valuation_date)
+
+        # Get yield and compounding frequency from curve
+        if isinstance(discount_curve, FlatDiscountCurve):
+            y = discount_curve.rate.rate
+            k = discount_curve.rate.compounding.periods_per_year
+            if k is None:  # Continuous or simple
+                if discount_curve.rate.compounding == CompoundingConvention.CONTINUOUS:
+                    return mac_dur  # For continuous, mod_dur = mac_dur
+                else:
+                    k = 1  # Simple compounding - treat as annual
+        elif isinstance(discount_curve, ZeroCurve):
+            # Use first point rate as proxy for yield
+            y = discount_curve.points[0][1]
+            k = discount_curve.compounding.periods_per_year
+            if k is None:
+                k = 1
+        else:
+            # Unknown curve type - assume annual compounding
+            y = 0.0
+            k = 1
+
+        return mac_dur / (1.0 + y / k)
+
+    def convexity(
+        self,
+        discount_curve: DiscountCurve,
+        valuation_date: date | None = None,
+    ) -> float:
+        """
+        Calculate convexity (second-order price sensitivity to yield).
+
+        Convexity measures the curvature of the price-yield relationship.
+        Used with modified duration for more accurate price change estimates:
+
+        dP/P = -D_mod * dy + 0.5 * C * (dy)^2
+
+        Formula: C = sum(t_i * (t_i + 1/k) * PV_i) / (PV * (1 + y/k)^2)
+
+        Args:
+            discount_curve: Curve for discounting cash flows
+            valuation_date: Reference date for PV calculation
+                           (defaults to curve's valuation date)
+
+        Returns:
+            Convexity factor
+
+        Raises:
+            ValueError: If schedule is empty
+            ValueError: If total PV is zero or negative
+
+        Example:
+            >>> curve = FlatDiscountCurve(InterestRate.from_percent(5.0), date(2024, 1, 1))
+            >>> conv = schedule.convexity(curve)
+            >>> # Full price change estimate for 100bps increase:
+            >>> dy = 0.01
+            >>> delta_p = -mod_dur * dy + 0.5 * conv * dy**2
+        """
+        if len(self.cash_flows) == 0:
+            raise ValueError("Cannot calculate convexity: schedule is empty")
+
+        val_date = valuation_date if valuation_date else discount_curve.valuation_date
+
+        # Get day count from curve or default
+        if hasattr(discount_curve, "day_count"):
+            day_count = discount_curve.day_count
+        else:
+            day_count = DayCountBasis(DayCountConvention.ACTUAL_365)
+
+        # Get yield and compounding from curve
+        if isinstance(discount_curve, FlatDiscountCurve):
+            y = discount_curve.rate.rate
+            k = discount_curve.rate.compounding.periods_per_year
+            if k is None:
+                if discount_curve.rate.compounding == CompoundingConvention.CONTINUOUS:
+                    k = 1  # Use 1 for continuous in convexity formula
+                else:
+                    k = 1  # Simple compounding
+        elif isinstance(discount_curve, ZeroCurve):
+            y = discount_curve.points[0][1]
+            k = discount_curve.compounding.periods_per_year
+            if k is None:
+                k = 1
+        else:
+            y = 0.0
+            k = 1
+
+        weighted_sum = 0.0
+        total_pv = 0.0
+
+        for cf in self.cash_flows:
+            pv = cf.present_value(discount_curve, val_date)
+            t = day_count.year_fraction(val_date, cf.date)
+            # Convexity weight: t * (t + 1/k)
+            weighted_sum += t * (t + 1.0 / k) * pv.amount
+            total_pv += pv.amount
+
+        if total_pv <= 0:
+            raise ValueError("Cannot calculate convexity: total PV is zero or negative")
+
+        denominator = total_pv * (1.0 + y / k) ** 2
+        return weighted_sum / denominator
 
     # String representation
 
