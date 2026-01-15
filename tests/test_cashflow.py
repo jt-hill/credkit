@@ -504,7 +504,7 @@ class TestXIRRWithLoan:
         loan = Loan.personal_loan(
             principal=Money.from_float(10000),
             annual_rate=InterestRate.from_percent(12.0),
-            term_months=12,
+            term=12,
             origination_date=date(2025, 1, 1),
         )
 
@@ -524,7 +524,7 @@ class TestXIRRWithLoan:
         loan = Loan.personal_loan(
             principal=Money.from_float(10000),
             annual_rate=InterestRate.from_percent(12.0),
-            term_months=12,
+            term=12,
             origination_date=date(2025, 1, 1),
         )
 
@@ -544,7 +544,7 @@ class TestXIRRWithLoan:
         loan = Loan.personal_loan(
             principal=Money.from_float(10000),
             annual_rate=InterestRate.from_percent(12.0),
-            term_months=12,
+            term=12,
             origination_date=date(2025, 1, 1),
         )
 
@@ -568,7 +568,7 @@ class TestYieldToMaturity:
         loan = Loan.personal_loan(
             principal=Money.from_float(10000),
             annual_rate=InterestRate.from_percent(12.0),
-            term_months=12,
+            term=12,
             origination_date=date(2025, 1, 1),
         )
 
@@ -585,7 +585,7 @@ class TestYieldToMaturity:
         loan = Loan.personal_loan(
             principal=Money.from_float(10000),
             annual_rate=InterestRate.from_percent(12.0),
-            term_months=12,
+            term=12,
             origination_date=date(2025, 1, 1),
         )
 
@@ -602,7 +602,7 @@ class TestYieldToMaturity:
         loan = Loan.personal_loan(
             principal=Money.from_float(10000),
             annual_rate=InterestRate.from_percent(12.0),
-            term_months=12,
+            term=12,
             origination_date=date(2025, 1, 1),
         )
 
@@ -620,7 +620,7 @@ class TestYieldToMaturity:
         loan = Loan.personal_loan(
             principal=Money.from_float(10000),
             annual_rate=InterestRate.from_percent(12.0),
-            term_months=36,
+            term=36,
             origination_date=date(2025, 1, 1),
         )
 
@@ -644,7 +644,7 @@ class TestYieldToMaturity:
         loan = Loan.personal_loan(
             principal=Money.from_float(10000),
             annual_rate=InterestRate.from_percent(12.0),
-            term_months=12,
+            term=12,
             origination_date=date(2025, 1, 1),
         )
 
@@ -668,7 +668,7 @@ class TestYieldToMaturity:
         loan = Loan.personal_loan(
             principal=Money.from_float(10000),
             annual_rate=InterestRate.from_percent(12.0),
-            term_months=36,
+            term=36,
             origination_date=date(2025, 1, 1),
         )
 

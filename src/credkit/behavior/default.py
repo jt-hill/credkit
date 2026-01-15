@@ -7,6 +7,7 @@ Provides tools for modeling default behavior using industry-standard metrics:
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -53,16 +54,22 @@ class DefaultRate:
         """
         Create DefaultRate from percentage.
 
+        .. deprecated::
+            Use direct constructor with decimal: ``DefaultRate(0.02)`` instead of
+            ``DefaultRate.from_percent(2.0)``. Will be removed in version 1.0.
+
         Args:
             percent: CDR as percentage (e.g., 2.0 for 2% CDR)
 
         Returns:
             DefaultRate instance
-
-        Example:
-            >>> DefaultRate.from_percent(2.0)
-            DefaultRate(annual_rate=0.02)
         """
+        warnings.warn(
+            "from_percent() is deprecated. Use DefaultRate(0.02) instead of "
+            "DefaultRate.from_percent(2.0). Will be removed in version 1.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return cls(annual_rate=percent / 100.0)
 
     @classmethod
@@ -247,20 +254,20 @@ class DefaultCurve:
         Create constant CDR curve (same rate for all periods).
 
         Args:
-            cdr: Either a DefaultRate or float CDR value
+            cdr: CDR as decimal (e.g., 0.02 for 2% CDR) or DefaultRate
 
         Returns:
             DefaultCurve with constant rate
 
         Example:
-            >>> curve = DefaultCurve.constant_cdr(0.02)
+            >>> curve = DefaultCurve.constant_cdr(0.02)  # 2% CDR
             >>> curve.rate_at_month(1) == curve.rate_at_month(360)
             True
         """
-        if isinstance(cdr, (int, float)):
-            rate = DefaultRate(annual_rate=float(cdr))
-        elif isinstance(cdr, DefaultRate):
+        if isinstance(cdr, DefaultRate):
             rate = cdr
+        elif isinstance(cdr, (int, float)):
+            rate = DefaultRate(annual_rate=float(cdr))
         else:
             raise TypeError(f"cdr must be float or DefaultRate, got {type(cdr)}")
 
@@ -297,11 +304,14 @@ class DefaultCurve:
 
         Args:
             peak_month: Month of peak default rate (default: 12)
-            peak_cdr: CDR at peak (default: 3%)
-            steady_cdr: Steady-state CDR after seasoning (default: 1%)
+            peak_cdr: CDR at peak as decimal (default: 0.03 for 3%)
+            steady_cdr: Steady-state CDR as decimal (default: 0.01 for 1%)
 
         Returns:
             DefaultCurve with vintage pattern
+
+        Example:
+            >>> curve = DefaultCurve.vintage_curve(peak_month=18, peak_cdr=0.04)
         """
         if peak_month < 1:
             raise ValueError(f"peak_month must be >= 1, got {peak_month}")

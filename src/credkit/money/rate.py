@@ -1,5 +1,6 @@
 """Interest rate representations with compounding conventions."""
 
+import warnings
 from dataclasses import dataclass
 from enum import Enum
 from math import e
@@ -98,6 +99,10 @@ class InterestRate:
         """
         Create an InterestRate from a percentage value.
 
+        .. deprecated::
+            Use direct constructor with decimal: ``InterestRate(0.065)`` instead of
+            ``InterestRate.from_percent(6.5)``. Will be removed in version 1.0.
+
         Args:
             percent: Interest rate as a percentage (e.g., 5.0 for 5%)
             compounding: Compounding convention
@@ -105,11 +110,13 @@ class InterestRate:
 
         Returns:
             InterestRate instance
-
-        Example:
-            >>> InterestRate.from_percent(5.25)  # 5.25% APR
-            InterestRate(rate=0.0525, ...)
         """
+        warnings.warn(
+            "from_percent() is deprecated. Use InterestRate(0.065) instead of "
+            "InterestRate.from_percent(6.5). Will be removed in version 1.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         rate = percent / 100.0
         return cls(rate=rate, compounding=compounding, day_count=day_count)
 
@@ -264,3 +271,30 @@ class InterestRate:
 
     def __repr__(self) -> str:
         return f"InterestRate({self.rate}, {self.compounding.name})"
+
+    def __format__(self, format_spec: str) -> str:
+        """
+        Format the interest rate as a percentage.
+
+        Supports standard float format specs applied to the percentage value.
+        Automatically appends '%' unless the format spec ends with 'r' (raw).
+
+        Examples:
+            >>> rate = InterestRate.from_percent(6.5)
+            >>> f"{rate:.2f}"
+            '6.50%'
+            >>> f"{rate:.1f}"
+            '6.5%'
+            >>> f"{rate:.2fr}"
+            '6.50'
+        """
+        if not format_spec:
+            return str(self)
+
+        # Check for 'r' suffix for raw (no % sign)
+        raw = format_spec.endswith("r")
+        if raw:
+            format_spec = format_spec[:-1]
+
+        formatted = format(self.to_percent(), format_spec)
+        return formatted if raw else f"{formatted}%"

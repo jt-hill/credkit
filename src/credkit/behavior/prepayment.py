@@ -8,6 +8,7 @@ Provides tools for modeling prepayment behavior using industry-standard metrics:
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -54,16 +55,22 @@ class PrepaymentRate:
         """
         Create PrepaymentRate from percentage.
 
+        .. deprecated::
+            Use direct constructor with decimal: ``PrepaymentRate(0.10)`` instead of
+            ``PrepaymentRate.from_percent(10.0)``. Will be removed in version 1.0.
+
         Args:
             percent: CPR as percentage (e.g., 10.0 for 10% CPR)
 
         Returns:
             PrepaymentRate instance
-
-        Example:
-            >>> PrepaymentRate.from_percent(10.0)
-            PrepaymentRate(annual_rate=0.10)
         """
+        warnings.warn(
+            "from_percent() is deprecated. Use PrepaymentRate(0.10) instead of "
+            "PrepaymentRate.from_percent(10.0). Will be removed in version 1.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return cls(annual_rate=percent / 100.0)
 
     @classmethod
@@ -248,20 +255,20 @@ class PrepaymentCurve:
         Create constant CPR curve (same rate for all periods).
 
         Args:
-            cpr: Either a PrepaymentRate or float CPR value
+            cpr: CPR as decimal (e.g., 0.10 for 10% CPR) or PrepaymentRate
 
         Returns:
             PrepaymentCurve with constant rate
 
         Example:
-            >>> curve = PrepaymentCurve.constant_cpr(0.10)
+            >>> curve = PrepaymentCurve.constant_cpr(0.10)  # 10% CPR
             >>> curve.rate_at_month(1) == curve.rate_at_month(360)
             True
         """
-        if isinstance(cpr, (int, float)):
-            rate = PrepaymentRate(annual_rate=float(cpr))
-        elif isinstance(cpr, PrepaymentRate):
+        if isinstance(cpr, PrepaymentRate):
             rate = cpr
+        elif isinstance(cpr, (int, float)):
+            rate = PrepaymentRate(annual_rate=float(cpr))
         else:
             raise TypeError(f"cpr must be float or PrepaymentRate, got {type(cpr)}")
 

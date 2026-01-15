@@ -1,5 +1,6 @@
 """Discount curves for present value calculations."""
 
+import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import date
@@ -33,13 +34,15 @@ class DiscountCurve(ABC):
 
     Discount curves provide discount factors for calculating present values
     of future cash flows.
+
+    Subclasses must provide:
+        valuation_date: date - Reference date for present value calculations
+        discount_factor(target_date, valuation_date) -> float - Calculate discount factor
     """
 
-    @property
-    @abstractmethod
-    def valuation_date(self) -> date:
-        """Date from which discounting is performed."""
-        ...
+    # Note: valuation_date is intentionally not an abstract property to allow
+    # dataclass subclasses to define it as a field without inheritance conflicts.
+    valuation_date: date
 
     @abstractmethod
     def discount_factor(self, target_date: date, valuation_date: date | None = None) -> float:
@@ -63,12 +66,18 @@ class FlatDiscountCurve(DiscountCurve):
 
     Most common for consumer loan analysis where a single discount rate
     (e.g., loan APR) is applied uniformly.
+
+    Example:
+        >>> curve = FlatDiscountCurve(
+        ...     rate=InterestRate(0.05),
+        ...     valuation_date=date(2024, 1, 1)
+        ... )
     """
 
     rate: InterestRate
     """Interest rate to use for discounting."""
 
-    _valuation_date: date
+    valuation_date: date
     """Reference date for present value calculations."""
 
     day_count: DayCountBasis = DayCountBasis(DayCountConvention.ACTUAL_365)
@@ -78,13 +87,38 @@ class FlatDiscountCurve(DiscountCurve):
         """Validate discount curve parameters."""
         if not isinstance(self.rate, InterestRate):
             raise TypeError(f"rate must be InterestRate, got {type(self.rate)}")
-        if not isinstance(self._valuation_date, date):
-            raise TypeError(f"valuation_date must be date, got {type(self._valuation_date)}")
+        if not isinstance(self.valuation_date, date):
+            raise TypeError(f"valuation_date must be date, got {type(self.valuation_date)}")
 
-    @property
-    def valuation_date(self) -> date:
-        """Date from which discounting is performed."""
-        return self._valuation_date
+    @classmethod
+    def from_rate(
+        cls,
+        rate: InterestRate,
+        valuation_date: date,
+        day_count: DayCountBasis = DayCountBasis(DayCountConvention.ACTUAL_365),
+    ) -> Self:
+        """
+        Create a flat discount curve from an interest rate.
+
+        .. deprecated::
+            Use direct constructor: ``FlatDiscountCurve(rate, valuation_date)`` instead.
+            Will be removed in version 1.0.
+
+        Args:
+            rate: Interest rate to use for discounting
+            valuation_date: Reference date for present value calculations
+            day_count: Day count convention (default: ACT/365)
+
+        Returns:
+            FlatDiscountCurve instance
+        """
+        warnings.warn(
+            "from_rate() is deprecated. Use FlatDiscountCurve(rate, valuation_date) "
+            "instead. Will be removed in version 1.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return cls(rate=rate, valuation_date=valuation_date, day_count=day_count)
 
     def discount_factor(self, target_date: date, valuation_date: date | None = None) -> float:
         """
@@ -98,10 +132,10 @@ class FlatDiscountCurve(DiscountCurve):
             Discount factor as float
 
         Example:
-            >>> curve = FlatDiscountCurve(InterestRate.from_percent(5.0), date(2024, 1, 1))
+            >>> curve = FlatDiscountCurve(InterestRate(0.05), date(2024, 1, 1))
             >>> df = curve.discount_factor(date(2025, 1, 1))  # 1 year at 5%
         """
-        val_date = valuation_date if valuation_date else self._valuation_date
+        val_date = valuation_date if valuation_date else self.valuation_date
 
         # No discounting if target is on or before valuation date
         if target_date <= val_date:
@@ -128,10 +162,10 @@ class FlatDiscountCurve(DiscountCurve):
         return self.rate
 
     def __str__(self) -> str:
-        return f"FlatDiscountCurve({self.rate}, valuation={self._valuation_date})"
+        return f"FlatDiscountCurve({self.rate}, valuation={self.valuation_date})"
 
     def __repr__(self) -> str:
-        return f"FlatDiscountCurve({self.rate!r}, {self._valuation_date!r})"
+        return f"FlatDiscountCurve({self.rate!r}, {self.valuation_date!r})"
 
 
 @dataclass(frozen=True)
@@ -141,9 +175,15 @@ class ZeroCurve(DiscountCurve):
 
     More sophisticated than flat curve, allows different rates for different
     maturities. Useful for mark-to-market valuations and complex analytics.
+
+    Example:
+        >>> curve = ZeroCurve.from_rates(
+        ...     valuation_date=date(2024, 1, 1),
+        ...     rates=[(date(2025, 1, 1), 0.05), (date(2026, 1, 1), 0.055)]
+        ... )
     """
 
-    _valuation_date: date
+    valuation_date: date
     """Reference date for the curve."""
 
     points: tuple[tuple[date, float], ...]
@@ -160,8 +200,8 @@ class ZeroCurve(DiscountCurve):
 
     def __post_init__(self) -> None:
         """Validate zero curve parameters."""
-        if not isinstance(self._valuation_date, date):
-            raise TypeError(f"valuation_date must be date, got {type(self._valuation_date)}")
+        if not isinstance(self.valuation_date, date):
+            raise TypeError(f"valuation_date must be date, got {type(self.valuation_date)}")
 
         if len(self.points) < 1:
             raise ValueError("Zero curve must have at least one point")
@@ -191,18 +231,13 @@ class ZeroCurve(DiscountCurve):
                 raise ValueError(f"Points must be in chronological order")
 
         # Validate all points are after valuation date
-        if self.points[0][0] <= self._valuation_date:
+        if self.points[0][0] <= self.valuation_date:
             raise ValueError("All curve points must be after valuation date")
 
         # Set default compounding if not provided
         if self.compounding is None:
             from ..money.rate import CompoundingConvention
             object.__setattr__(self, "compounding", CompoundingConvention.MONTHLY)
-
-    @property
-    def valuation_date(self) -> date:
-        """Date from which discounting is performed."""
-        return self._valuation_date
 
     @classmethod
     def from_rates(
@@ -215,6 +250,9 @@ class ZeroCurve(DiscountCurve):
     ) -> Self:
         """
         Create zero curve from a list of (date, rate) pairs.
+
+        This factory method is convenient because it sorts the rates
+        and converts them to the required tuple format.
 
         Args:
             valuation_date: Reference date for the curve
@@ -238,7 +276,7 @@ class ZeroCurve(DiscountCurve):
             key=lambda x: x[0]
         )
         return cls(
-            _valuation_date=valuation_date,
+            valuation_date=valuation_date,
             points=tuple(float_rates),
             day_count=day_count,
             compounding=compounding,
@@ -260,7 +298,7 @@ class ZeroCurve(DiscountCurve):
             >>> curve = ZeroCurve.from_rates(date(2024, 1, 1), [(date(2025, 1, 1), 0.05)])
             >>> df = curve.discount_factor(date(2025, 1, 1))
         """
-        val_date = valuation_date if valuation_date else self._valuation_date
+        val_date = valuation_date if valuation_date else self.valuation_date
 
         # No discounting if target is on or before valuation date
         if target_date <= val_date:
@@ -293,10 +331,10 @@ class ZeroCurve(DiscountCurve):
         """
         from ..money.rate import InterestRate
 
-        if target_date <= self._valuation_date:
+        if target_date <= self.valuation_date:
             raise ValueError("Target date must be after valuation date")
 
-        zero_rate = self._interpolate_rate(target_date, self._valuation_date)
+        zero_rate = self._interpolate_rate(target_date, self.valuation_date)
         return InterestRate(rate=zero_rate, compounding=self.compounding, day_count=self.day_count)
 
     def forward_rate(self, start_date: date, end_date: date) -> InterestRate:
@@ -319,14 +357,14 @@ class ZeroCurve(DiscountCurve):
         """
         from ..money.rate import InterestRate
 
-        if start_date < self._valuation_date:
+        if start_date < self.valuation_date:
             raise ValueError("Start date must be on or after valuation date")
         if end_date <= start_date:
             raise ValueError("End date must be after start date")
 
         # Get discount factors
-        df_start = self.discount_factor(start_date, self._valuation_date)
-        df_end = self.discount_factor(end_date, self._valuation_date)
+        df_start = self.discount_factor(start_date, self.valuation_date)
+        df_end = self.discount_factor(end_date, self.valuation_date)
 
         # Forward rate: (df_start / df_end) - 1, adjusted for time period
         year_fraction = self.day_count.year_fraction(start_date, end_date)
@@ -416,7 +454,7 @@ class ZeroCurve(DiscountCurve):
         return self.points[-1][1]
 
     def __str__(self) -> str:
-        return f"ZeroCurve({len(self.points)} points, {self.interpolation}, valuation={self._valuation_date})"
+        return f"ZeroCurve({len(self.points)} points, {self.interpolation}, valuation={self.valuation_date})"
 
     def __repr__(self) -> str:
-        return f"ZeroCurve({self._valuation_date!r}, {len(self.points)} points)"
+        return f"ZeroCurve({self.valuation_date!r}, {len(self.points)} points)"

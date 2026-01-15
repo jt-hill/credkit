@@ -325,7 +325,7 @@ class TestLoanCreation:
         loan = Loan.from_float(
             principal=50000.0,
             annual_rate_percent=5.5,
-            term_years=15,
+            term=15,
             origination_date=date(2024, 1, 1),
         )
 
@@ -337,7 +337,7 @@ class TestLoanCreation:
         loan = Loan.mortgage(
             principal=Money.from_float(400000.0),
             annual_rate=InterestRate.from_percent(6.875),
-            term_years=30,
+            term=30,
             origination_date=date(2024, 1, 1),
         )
 
@@ -356,7 +356,7 @@ class TestLoanCalculations:
         loan = Loan.from_float(
             principal=100000.0,
             annual_rate_percent=6.0,
-            term_years=30,
+            term=30,
             origination_date=date(2024, 1, 1),
         )
 
@@ -371,7 +371,7 @@ class TestLoanCalculations:
         loan = Loan.from_float(
             principal=100000.0,
             annual_rate_percent=6.0,
-            term_years=5,
+            term=5,
             origination_date=date(2024, 1, 15),
         )
 
@@ -407,7 +407,7 @@ class TestLoanScheduleGeneration:
         loan = Loan.from_float(
             principal=100000.0,
             annual_rate_percent=5.0,
-            term_years=15,
+            term=15,
             origination_date=date(2024, 1, 1),
         )
 
@@ -423,7 +423,7 @@ class TestLoanScheduleGeneration:
         loan = Loan.from_float(
             principal=100000.0,
             annual_rate_percent=5.0,
-            term_years=15,
+            term=15,
             origination_date=date(2024, 1, 1),
         )
 
@@ -629,7 +629,7 @@ class TestLoanAnalytics:
         loan = Loan.personal_loan(
             principal=Money.from_float(12000),
             annual_rate=InterestRate.from_percent(12.0),
-            term_months=12,
+            term=12,
             origination_date=date(2025, 1, 1),
         )
 
@@ -645,13 +645,13 @@ class TestLoanAnalytics:
         loan_short = Loan.personal_loan(
             principal=Money.from_float(10000),
             annual_rate=InterestRate.from_percent(10.0),
-            term_months=12,
+            term=12,
             origination_date=date(2025, 1, 1),
         )
         loan_long = Loan.personal_loan(
             principal=Money.from_float(10000),
             annual_rate=InterestRate.from_percent(10.0),
-            term_months=36,
+            term=36,
             origination_date=date(2025, 1, 1),
         )
 
@@ -668,7 +668,7 @@ class TestLoanAnalytics:
         loan = Loan.personal_loan(
             principal=Money.from_float(10000),
             annual_rate=InterestRate.from_percent(12.0),
-            term_months=36,
+            term=36,
             origination_date=date(2025, 1, 1),
         )
 
@@ -688,7 +688,7 @@ class TestLoanAnalytics:
         loan = Loan.personal_loan(
             principal=Money.from_float(10000),
             annual_rate=InterestRate.from_percent(12.0),
-            term_months=12,
+            term=12,
             origination_date=date(2025, 1, 1),
         )
 
@@ -708,7 +708,7 @@ class TestLoanAnalytics:
         loan = Loan.personal_loan(
             principal=Money.from_float(10000),
             annual_rate=InterestRate.from_percent(12.0),
-            term_months=24,
+            term=24,
             origination_date=date(2025, 1, 1),
         )
 
@@ -727,7 +727,7 @@ class TestLoanAnalytics:
         loan = Loan.personal_loan(
             principal=Money.from_float(10000),
             annual_rate=InterestRate.from_percent(12.0),
-            term_months=24,
+            term=24,
             origination_date=date(2025, 1, 1),
         )
 
@@ -746,7 +746,7 @@ class TestLoanAnalytics:
         loan = Loan.personal_loan(
             principal=Money.from_float(10000),
             annual_rate=InterestRate.from_percent(12.0),
-            term_months=36,
+            term=36,
             origination_date=date(2025, 1, 1),
         )
 
@@ -776,7 +776,7 @@ class TestLoanAnalytics:
         loan = Loan.mortgage(
             principal=Money.from_float(300000),
             annual_rate=InterestRate.from_percent(6.5),
-            term_years=30,
+            term=30,
             origination_date=date(2025, 1, 1),
         )
 

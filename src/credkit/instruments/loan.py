@@ -110,7 +110,7 @@ class Loan:
         cls,
         principal: float,
         annual_rate_percent: float,
-        term_years: int,
+        term: int,
         payment_frequency: PaymentFrequency = PaymentFrequency.MONTHLY,
         amortization_type: AmortizationType = AmortizationType.LEVEL_PAYMENT,
         origination_date: date | None = None,
@@ -121,7 +121,7 @@ class Loan:
         Args:
             principal: Loan amount in dollars
             annual_rate_percent: Annual rate as percentage (e.g., 6.5 for 6.5%)
-            term_years: Loan term in years
+            term: Loan term in years
             payment_frequency: Payment frequency (default: MONTHLY)
             amortization_type: Amortization type (default: LEVEL_PAYMENT)
             origination_date: Origination date (default: today)
@@ -133,15 +133,15 @@ class Loan:
             >>> loan = Loan.from_float(
             ...     principal=300000.0,
             ...     annual_rate_percent=6.5,
-            ...     term_years=30,
+            ...     term=30,
             ... )
         """
         from datetime import date as date_class
 
         return cls(
-            principal=Money.from_float(principal),
+            principal=Money(principal),
             annual_rate=InterestRate.from_percent(annual_rate_percent),
-            term=Period.from_string(f"{term_years}Y"),
+            term=Period.from_string(f"{term}Y"),
             payment_frequency=payment_frequency,
             amortization_type=amortization_type,
             origination_date=origination_date or date_class.today(),
@@ -152,7 +152,7 @@ class Loan:
         cls,
         principal: Money,
         annual_rate: InterestRate,
-        term_years: int = 30,
+        term: int | str | Period = 30,
         origination_date: date | None = None,
     ) -> Self:
         """
@@ -161,7 +161,7 @@ class Loan:
         Args:
             principal: Loan amount
             annual_rate: Annual interest rate
-            term_years: Loan term in years (default: 30)
+            term: Loan term - int (years), string ("30Y"), or Period (default: 30)
             origination_date: Origination date (default: today)
 
         Returns:
@@ -169,17 +169,25 @@ class Loan:
 
         Example:
             >>> loan = Loan.mortgage(
-            ...     principal=Money.from_float(400000),
-            ...     annual_rate=InterestRate.from_percent(6.875),
-            ...     term_years=30,
+            ...     principal=Money(400000),
+            ...     annual_rate=pct(6.875),
+            ...     term=30,  # or "30Y" or Period.years(30)
             ... )
         """
         from datetime import date as date_class
 
+        # Convert term to Period
+        if isinstance(term, int):
+            term_period = Period.from_string(f"{term}Y")
+        elif isinstance(term, str):
+            term_period = Period.from_string(term)
+        else:
+            term_period = term
+
         return cls(
             principal=principal,
             annual_rate=annual_rate,
-            term=Period.from_string(f"{term_years}Y"),
+            term=term_period,
             payment_frequency=PaymentFrequency.MONTHLY,
             amortization_type=AmortizationType.LEVEL_PAYMENT,
             origination_date=origination_date or date_class.today(),
@@ -190,7 +198,7 @@ class Loan:
         cls,
         principal: Money,
         annual_rate: InterestRate,
-        term_months: int = 60,
+        term: int | str | Period = 60,
         origination_date: date | None = None,
     ) -> Self:
         """
@@ -199,7 +207,7 @@ class Loan:
         Args:
             principal: Loan amount
             annual_rate: Annual interest rate
-            term_months: Loan term in months (default: 60)
+            term: Loan term - int (months), string ("60M"), or Period (default: 60)
             origination_date: Origination date (default: today)
 
         Returns:
@@ -207,17 +215,25 @@ class Loan:
 
         Example:
             >>> loan = Loan.auto_loan(
-            ...     principal=Money.from_float(35000),
-            ...     annual_rate=InterestRate.from_percent(5.5),
-            ...     term_months=72,
+            ...     principal=Money(35000),
+            ...     annual_rate=pct(5.5),
+            ...     term=72,  # or "72M" or "6Y"
             ... )
         """
         from datetime import date as date_class
 
+        # Convert term to Period
+        if isinstance(term, int):
+            term_period = Period.from_string(f"{term}M")
+        elif isinstance(term, str):
+            term_period = Period.from_string(term)
+        else:
+            term_period = term
+
         return cls(
             principal=principal,
             annual_rate=annual_rate,
-            term=Period.from_string(f"{term_months}M"),
+            term=term_period,
             payment_frequency=PaymentFrequency.MONTHLY,
             amortization_type=AmortizationType.LEVEL_PAYMENT,
             origination_date=origination_date or date_class.today(),
@@ -228,7 +244,7 @@ class Loan:
         cls,
         principal: Money,
         annual_rate: InterestRate,
-        term_months: int = 36,
+        term: int | str | Period = 36,
         origination_date: date | None = None,
     ) -> Self:
         """
@@ -237,7 +253,7 @@ class Loan:
         Args:
             principal: Loan amount
             annual_rate: Annual interest rate
-            term_months: Loan term in months (default: 36)
+            term: Loan term - int (months), string ("36M"), or Period (default: 36)
             origination_date: Origination date (default: today)
 
         Returns:
@@ -245,17 +261,25 @@ class Loan:
 
         Example:
             >>> loan = Loan.personal_loan(
-            ...     principal=Money.from_float(10000),
-            ...     annual_rate=InterestRate.from_percent(12.0),
-            ...     term_months=48,
+            ...     principal=Money(10000),
+            ...     annual_rate=pct(12.0),
+            ...     term=48,  # or "48M" or "4Y"
             ... )
         """
         from datetime import date as date_class
 
+        # Convert term to Period
+        if isinstance(term, int):
+            term_period = Period.from_string(f"{term}M")
+        elif isinstance(term, str):
+            term_period = Period.from_string(term)
+        else:
+            term_period = term
+
         return cls(
             principal=principal,
             annual_rate=annual_rate,
-            term=Period.from_string(f"{term_months}M"),
+            term=term_period,
             payment_frequency=PaymentFrequency.MONTHLY,
             amortization_type=AmortizationType.LEVEL_PAYMENT,
             origination_date=origination_date or date_class.today(),

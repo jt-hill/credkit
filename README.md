@@ -30,9 +30,9 @@ from datetime import date
 
 # Create a 30-year mortgage
 loan = Loan.mortgage(
-    principal=Money.from_float(300000.0),
-    annual_rate=InterestRate.from_percent(6.5),
-    term_years=30,
+    principal=Money(300000.0),
+    annual_rate=InterestRate(0.065),
+    term=30,
     origination_date=date(2024, 1, 1),
 )
 
@@ -40,14 +40,14 @@ loan = Loan.mortgage(
 payment = loan.calculate_payment()  # ~$1,896.20/month
 
 # Generate amortization schedule
-schedule = loan.generate_schedule()  # 720 cash flows (360 principal + 360 interest)
+schedule = loan.generate_schedule()  # 360 cash flows
 
 # Calculate total interest over life of loan
 total_interest = loan.total_interest()
 
 # Value the loan at market rate
 market_curve = FlatDiscountCurve(
-    InterestRate.from_percent(5.5),
+    rate=InterestRate(0.055),
     valuation_date=date(2024, 1, 1)
 )
 npv = schedule.present_value(market_curve)
@@ -89,7 +89,7 @@ See [EXAMPLES.md](EXAMPLES.md) for more comprehensive examples of all features.
 - **Float64 precision**: Standard IEEE 754 double precision with appropriate rounding
 - **Type safety**: Full type hints with `py.typed` marker
 - **Composable**: Build complex models from simple primitives
-- **Tested**: 148 passing tests with comprehensive coverage
+- **Tested**: 184 passing tests with comprehensive coverage
 
 ## Numeric Precision
 
@@ -127,7 +127,7 @@ cd credkit/core-classes
 uv sync --dev
 
 # Run tests
-uv run pytest tests/ -v  # All 148 tests should pass
+uv run pytest tests/ -v  # All 184 tests should pass
 ```
 
 ## Contributing

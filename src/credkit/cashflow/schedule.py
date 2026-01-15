@@ -350,6 +350,45 @@ class CashFlowSchedule:
             return None
         return (self.earliest_date(), self.latest_date())  # type: ignore
 
+    def balance_at(self, as_of_date: date) -> Money:
+        """
+        Calculate outstanding principal balance as of a specific date.
+
+        Sums all principal cash flows (PRINCIPAL, PREPAYMENT, BALLOON) on or before
+        the as_of_date. The outstanding balance is the original principal minus
+        all principal payments made to date.
+
+        Args:
+            as_of_date: Date to calculate balance as of
+
+        Returns:
+            Remaining principal balance
+
+        Example:
+            >>> schedule = loan.generate_schedule()
+            >>> balance = schedule.balance_at(date(2025, 1, 1))
+        """
+        # Get all principal flows on or before as_of_date
+        principal_flows = self.get_principal_flows().filter_by_date_range(
+            end=as_of_date
+        )
+
+        if len(principal_flows) == 0:
+            # No principal payments yet - return original principal
+            all_principal = self.get_principal_flows()
+            if len(all_principal) > 0:
+                # Sum all future principal to get original balance
+                return all_principal.total_amount()
+            else:
+                # No principal flows in schedule
+                return Money.zero(self.cash_flows[0].amount.currency)
+
+        # Outstanding = Total principal - Principal paid to date
+        total_principal = self.get_principal_flows().total_amount()
+        paid_to_date = principal_flows.total_amount()
+
+        return total_principal - paid_to_date
+
     # Yield calculation methods
 
     def to_arrays(self) -> tuple[list[date], list[float]]:

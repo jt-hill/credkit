@@ -8,6 +8,7 @@ Provides tools for modeling credit losses and recovery assumptions:
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -75,20 +76,23 @@ class LossGivenDefault:
         """
         Create LGD from severity percentage.
 
+        .. deprecated::
+            Use direct constructor with decimal: ``LossGivenDefault(0.40)`` instead of
+            ``LossGivenDefault.from_percent(40.0)``. Will be removed in version 1.0.
+
         Args:
             severity_percent: Severity as percentage (e.g., 40.0 for 40% severity)
             recovery_lag: Time to recovery (default: immediate)
 
         Returns:
             LossGivenDefault instance
-
-        Example:
-            >>> lgd = LossGivenDefault.from_percent(40.0)
-            >>> lgd.severity
-            0.40
-            >>> lgd.recovery_rate()
-            0.60
         """
+        warnings.warn(
+            "from_percent() is deprecated. Use LossGivenDefault(0.40) instead of "
+            "LossGivenDefault.from_percent(40.0). Will be removed in version 1.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         severity = severity_percent / 100.0
 
         if recovery_lag is None:

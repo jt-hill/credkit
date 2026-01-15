@@ -130,6 +130,39 @@ class Money:
         """Absolute value of the money amount."""
         return Money(amount=abs(self.amount), currency=self.currency)
 
+    def ratio(self, other: Self) -> float:
+        """
+        Calculate ratio of this amount to another (same currency).
+
+        Useful for calculating percentages: (interest / principal).ratio()
+
+        Args:
+            other: Money amount to divide by (must be same currency)
+
+        Returns:
+            Ratio as float
+
+        Raises:
+            TypeError: If other is not Money
+            ValueError: If currencies don't match
+            ZeroDivisionError: If other amount is zero
+
+        Example:
+            >>> principal = Money.from_float(100000)
+            >>> interest = Money.from_float(5000)
+            >>> interest.ratio(principal)
+            0.05
+        """
+        if not isinstance(other, Money):
+            raise TypeError(f"Cannot calculate ratio with {type(other)}")
+        if self.currency != other.currency:
+            raise ValueError(
+                f"Cannot calculate ratio between {self.currency} and {other.currency}"
+            )
+        if other.amount == 0:
+            raise ZeroDivisionError("Cannot divide by zero amount")
+        return self.amount / other.amount
+
     # Comparison operations
 
     def __eq__(self, other: object) -> bool:

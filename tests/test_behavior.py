@@ -322,7 +322,7 @@ class TestScheduleAdjustments:
         return Loan.from_float(
             principal=100000,
             annual_rate_percent=6.0,
-            term_years=5,
+            term=5,
             origination_date=date(2025, 1, 1),
         )
 
@@ -482,7 +482,7 @@ class TestLoanBehavioralMethods:
         return Loan.mortgage(
             principal=Money.from_float(300000),
             annual_rate=InterestRate.from_percent(6.5),
-            term_years=30,
+            term=30,
             origination_date=date(2025, 1, 1),
         )
 
@@ -538,7 +538,7 @@ class TestIntegration:
         loan = Loan.mortgage(
             principal=Money.from_float(300000),
             annual_rate=InterestRate.from_percent(6.5),
-            term_years=30,
+            term=30,
             origination_date=date(2025, 1, 1),
         )
 
@@ -548,8 +548,8 @@ class TestIntegration:
 
         # Value it
         discount_curve = FlatDiscountCurve(
-            rate=InterestRate.from_percent(5.0),
-            _valuation_date=date(2025, 1, 1),
+            rate=InterestRate(0.05),
+            valuation_date=date(2025, 1, 1),
         )
 
         npv = expected_schedule.present_value(discount_curve)
@@ -564,7 +564,7 @@ class TestIntegration:
         loan = Loan.mortgage(
             principal=Money.from_float(300000),
             annual_rate=InterestRate.from_percent(6.5),
-            term_years=30,
+            term=30,
             origination_date=date(2025, 1, 1),
         )
 

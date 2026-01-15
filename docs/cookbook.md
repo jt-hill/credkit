@@ -90,7 +90,7 @@ Currency-aware monetary amounts:
 from credkit import Money, USD
 
 principal = Money(100000.00, USD)
-interest = Money.from_float(542.50)
+interest = Money(542.50)
 
 total = principal + interest
 monthly = total / 12
@@ -108,7 +108,7 @@ APR with multiple compounding conventions:
 from credkit import InterestRate, CompoundingConvention
 
 # 5.25% APR with monthly compounding (default for consumer loans)
-rate = InterestRate.from_percent(5.25)
+rate = InterestRate(0.0525)
 
 # Calculate present value discount factor
 pv_factor = rate.discount_factor(10.0)  # 10 years
@@ -128,7 +128,7 @@ from credkit import Spread
 
 # Prime + 250 basis points
 spread = Spread.from_bps(250)
-prime_rate = InterestRate.from_percent(8.5)
+prime_rate = InterestRate(0.085)
 
 loan_rate = spread.apply_to(prime_rate)  # 10.75%
 ```
@@ -148,14 +148,14 @@ from datetime import date
 # Create individual cash flows
 principal_payment = CashFlow(
     date=date(2025, 1, 1),
-    amount=Money.from_float(1000.0),
+    amount=Money(1000.0),
     type=CashFlowType.PRINCIPAL,
     description="Monthly principal payment"
 )
 
 interest_payment = CashFlow(
     date=date(2025, 1, 1),
-    amount=Money.from_float(250.0),
+    amount=Money(250.0),
     type=CashFlowType.INTEREST
 )
 ```
@@ -169,7 +169,7 @@ from credkit import FlatDiscountCurve, InterestRate
 from datetime import date
 
 # Simple flat curve using one rate
-rate = InterestRate.from_percent(6.5)
+rate = InterestRate(0.065)
 curve = FlatDiscountCurve(rate, valuation_date=date(2024, 1, 1))
 
 # Calculate present value of future cash flow
@@ -233,8 +233,8 @@ from datetime import date
 
 # Method 1: Direct construction
 loan = Loan(
-    principal=Money.from_float(300000.0),
-    annual_rate=InterestRate.from_percent(6.5),
+    principal=Money(300000.0),
+    annual_rate=InterestRate(0.065),
     term=Period.from_string("30Y"),
     payment_frequency=PaymentFrequency.MONTHLY,
     amortization_type=AmortizationType.LEVEL_PAYMENT,
@@ -245,27 +245,27 @@ loan = Loan(
 loan = Loan.from_float(
     principal=300000.0,
     annual_rate_percent=6.5,
-    term_years=30,
+    term=30,
     origination_date=date(2024, 1, 1),
 )
 
 # Method 3: Use factory methods for common loan types
 loan = Loan.mortgage(
-    principal=Money.from_float(400000.0),
-    annual_rate=InterestRate.from_percent(6.875),
-    term_years=30,
+    principal=Money(400000.0),
+    annual_rate=InterestRate(0.0688),
+    term=30,
 )
 
 auto_loan = Loan.auto_loan(
-    principal=Money.from_float(35000.0),
-    annual_rate=InterestRate.from_percent(5.5),
-    term_months=72,
+    principal=Money(35000.0),
+    annual_rate=InterestRate(0.055),
+    term=72,
 )
 
 personal_loan = Loan.personal_loan(
-    principal=Money.from_float(10000.0),
-    annual_rate=InterestRate.from_percent(12.0),
-    term_months=48,
+    principal=Money(10000.0),
+    annual_rate=InterestRate(0.12),
+    term=48,
 )
 ```
 
@@ -324,8 +324,8 @@ from credkit import AmortizationType
 
 # Level payment (standard mortgages)
 mortgage = Loan(
-    principal=Money.from_float(200000.0),
-    annual_rate=InterestRate.from_percent(6.0),
+    principal=Money(200000.0),
+    annual_rate=InterestRate(0.06),
     term=Period.from_string("15Y"),
     payment_frequency=PaymentFrequency.MONTHLY,
     amortization_type=AmortizationType.LEVEL_PAYMENT,
@@ -334,8 +334,8 @@ mortgage = Loan(
 
 # Interest-only with balloon
 interest_only = Loan(
-    principal=Money.from_float(500000.0),
-    annual_rate=InterestRate.from_percent(5.5),
+    principal=Money(500000.0),
+    annual_rate=InterestRate(0.055),
     term=Period.from_string("10Y"),
     payment_frequency=PaymentFrequency.MONTHLY,
     amortization_type=AmortizationType.INTEREST_ONLY,
@@ -344,8 +344,8 @@ interest_only = Loan(
 
 # Bullet payment (single payment at maturity)
 bullet = Loan(
-    principal=Money.from_float(1000000.0),
-    annual_rate=InterestRate.from_percent(4.0),
+    principal=Money(1000000.0),
+    annual_rate=InterestRate(0.04),
     term=Period.from_string("5Y"),
     payment_frequency=PaymentFrequency.MONTHLY,
     amortization_type=AmortizationType.BULLET,
@@ -362,15 +362,15 @@ from credkit import FlatDiscountCurve
 
 # Generate loan schedule
 loan = Loan.mortgage(
-    principal=Money.from_float(300000.0),
-    annual_rate=InterestRate.from_percent(6.5),
-    term_years=30,
+    principal=Money(300000.0),
+    annual_rate=InterestRate(0.065),
+    term=30,
     origination_date=date(2024, 1, 1),
 )
 schedule = loan.generate_schedule()
 
 # Value loan using market discount rate
-market_rate = InterestRate.from_percent(5.5)
+market_rate = InterestRate(0.055)
 curve = FlatDiscountCurve(market_rate, valuation_date=date(2024, 1, 1))
 
 # Calculate present value
@@ -380,7 +380,7 @@ print(f"Loan NPV at market rate: {loan_value}")
 # Analyze interest rate sensitivity
 for rate_pct in [5.0, 5.5, 6.0, 6.5, 7.0]:
     curve = FlatDiscountCurve(
-        InterestRate.from_percent(rate_pct),
+        InterestRate(rate_pct / 100),
         valuation_date=date(2024, 1, 1)
     )
     pv = schedule.present_value(curve)
@@ -399,7 +399,7 @@ Industry-standard CPR (Constant Prepayment Rate) modeling:
 from credkit import PrepaymentRate
 
 # Create prepayment rate
-cpr = PrepaymentRate.from_percent(10.0)  # 10% CPR
+cpr = PrepaymentRate(0.10)  # 10% CPR
 print(f"CPR: {cpr.to_percent()}%")
 
 # Convert to monthly rate (SMM)
@@ -436,9 +436,9 @@ print(f"Month 30: {psa_100.rate_at_month(30).to_percent()}% CPR")
 
 # Custom curve with different speeds over time
 custom_curve = PrepaymentCurve.from_list([
-    (1, PrepaymentRate.from_percent(5.0)),   # Months 1-11: 5% CPR
-    (12, PrepaymentRate.from_percent(10.0)), # Months 12-23: 10% CPR
-    (24, PrepaymentRate.from_percent(8.0)),  # Month 24+: 8% CPR
+    (1, PrepaymentRate(0.05)),   # Months 1-11: 5% CPR
+    (12, PrepaymentRate(0.10)), # Months 12-23: 10% CPR
+    (24, PrepaymentRate(0.08)),  # Month 24+: 8% CPR
 ])
 
 # Scale curves (e.g., stress testing)
@@ -453,7 +453,7 @@ Model expected default behavior:
 from credkit import DefaultRate, DefaultCurve
 
 # Constant default rate
-cdr = DefaultRate.from_percent(2.0)  # 2% CDR
+cdr = DefaultRate(0.02)  # 2% CDR
 mdr = cdr.to_mdr()  # Convert to monthly default rate
 
 # Constant default curve
@@ -479,22 +479,22 @@ Model recovery assumptions:
 from credkit import LossGivenDefault, Period
 
 # Severity-based LGD (loss given default)
-lgd = LossGivenDefault.from_percent(40.0)  # 40% severity
-print(f"Severity: {lgd.severity_percent()}%")
-print(f"Recovery rate: {lgd.recovery_rate_percent()}%")
+lgd = LossGivenDefault(0.40)  # 40% severity
+print(f"Severity: {lgd.to_percent()}%")
+print(f"Recovery rate: {lgd.recovery_rate() * 100}%")
 
 # LGD with recovery lag
-lgd_with_lag = LossGivenDefault.from_percent(
-    severity=40.0,
+lgd_with_lag = LossGivenDefault(
+    severity=0.40,
     recovery_lag=Period.from_string("12M")  # 12 months to recovery
 )
 
 # Calculate loss and recovery amounts
 from credkit import Money
-defaulted_balance = Money.from_float(100000.0)
+defaulted_balance = Money(100000.0)
 
-loss_amount = lgd.loss_amount(defaulted_balance)
-recovery_amount = lgd.recovery_amount(defaulted_balance)
+loss_amount = lgd.calculate_loss(defaulted_balance)
+recovery_amount = lgd.calculate_recovery(defaulted_balance)
 
 print(f"Loss: {loss_amount}")      # $40,000
 print(f"Recovery: {recovery_amount}")  # $60,000
@@ -510,15 +510,15 @@ from datetime import date
 
 # Create loan
 loan = Loan.mortgage(
-    principal=Money.from_float(300000.0),
-    annual_rate=InterestRate.from_percent(6.5),
-    term_years=30,
+    principal=Money(300000.0),
+    annual_rate=InterestRate(0.065),
+    term=30,
     origination_date=date(2024, 1, 1),
 )
 
 # Create discount curve for valuation
 discount_curve = FlatDiscountCurve(
-    InterestRate.from_percent(5.5),
+    InterestRate(0.055),
     valuation_date=date(2024, 1, 1)
 )
 
@@ -529,7 +529,7 @@ base_npv = base_schedule.present_value(discount_curve)
 # Scenario: borrower prepays $50,000 at year 5
 prepay_schedule = loan.apply_prepayment(
     prepayment_date=date(2029, 1, 1),
-    prepayment_amount=Money.from_float(50000.0)
+    prepayment_amount=Money(50000.0)
 )
 
 # Schedule now includes:
@@ -556,9 +556,9 @@ from datetime import date
 
 # Create loan
 loan = Loan.mortgage(
-    principal=Money.from_float(300000.0),
-    annual_rate=InterestRate.from_percent(6.5),
-    term_years=30,
+    principal=Money(300000.0),
+    annual_rate=InterestRate(0.065),
+    term=30,
     origination_date=date(2024, 1, 1),
 )
 
@@ -579,7 +579,7 @@ print(f"Total expected prepayments: {total_prepayments}")
 
 # Value expected cash flows
 market_curve = FlatDiscountCurve(
-    InterestRate.from_percent(5.5),
+    InterestRate(0.055),
     valuation_date=date(2024, 1, 1)
 )
 expected_npv = expected_schedule.present_value(market_curve)
@@ -596,7 +596,8 @@ from datetime import date
 
 # Assume loan and market_curve are already defined from previous example
 # loan = Loan.mortgage(...)
-# market_curve = FlatDiscountCurve(InterestRate.from_percent(5.5), valuation_date=date(2024, 1, 1))
+# market_curve = FlatDiscountCurve(InterestRate(0.055),
+#                                            valuation_date=date(2024, 1, 1))
 
 # Create multiple PSA scenarios
 psa_speeds = [50, 100, 150, 200]
@@ -629,13 +630,13 @@ from credkit import Loan, Money, InterestRate, PrepaymentCurve, FlatDiscountCurv
 from datetime import date
 
 loan = Loan.mortgage(
-    principal=Money.from_float(300000.0),
-    annual_rate=InterestRate.from_percent(6.5),
-    term_years=30,
+    principal=Money(300000.0),
+    annual_rate=InterestRate(0.065),
+    term=30,
 )
 
 discount_curve = FlatDiscountCurve(
-    InterestRate.from_percent(5.5),
+    InterestRate(0.055),
     valuation_date=date(2024, 1, 1)
 )
 
@@ -657,11 +658,11 @@ base_rate = 5.5
 rate_shock = 0.1  # 10 bps
 
 curve_up = FlatDiscountCurve(
-    InterestRate.from_percent(base_rate + rate_shock),
+    InterestRate((base_rate + rate_shock) / 100),
     valuation_date=date(2024, 1, 1)
 )
 curve_down = FlatDiscountCurve(
-    InterestRate.from_percent(base_rate - rate_shock),
+    InterestRate((base_rate - rate_shock) / 100),
     valuation_date=date(2024, 1, 1)
 )
 
@@ -674,8 +675,8 @@ npv_down = expected_cf.present_value(curve_down)
 npv_base = expected_cf.present_value(discount_curve)
 
 # Effective duration = (PV_down - PV_up) / (2 * PV_base * rate_change)
-duration = (npv_down - npv_up) / (2 * npv_base * (rate_shock / 100.0))
-print(f"\nEffective duration: {duration} years")
+duration = (npv_down.amount - npv_up.amount) / (2 * npv_base.amount * (rate_shock / 100.0))
+print(f"\nEffective duration: {duration:.2f} years")
 ```
 
 ### Default Scenarios
@@ -688,9 +689,9 @@ from datetime import date, timedelta
 
 # Create loan
 loan = Loan.auto_loan(
-    principal=Money.from_float(30000.0),
-    annual_rate=InterestRate.from_percent(7.5),
-    term_months=60,
+    principal=Money(30000.0),
+    annual_rate=InterestRate(0.075),
+    term=60,
     origination_date=date(2024, 1, 1),
 )
 
@@ -708,8 +709,8 @@ balance_before = calculate_outstanding_balance(
 print(f"Outstanding balance at default: {balance_before}")
 
 # Define LGD with recovery lag
-lgd = LossGivenDefault.from_percent(
-    severity=35.0,  # 35% loss on auto loan
+lgd = LossGivenDefault(
+    severity=0.35,  # 35% loss on auto loan
     recovery_lag=Period.from_string("3M")  # 3 months to recover vehicle
 )
 
@@ -738,16 +739,16 @@ from datetime import date
 
 # Create portfolio of loans
 portfolio = [
-    Loan.mortgage(Money.from_float(300000.0), InterestRate.from_percent(6.5), term_years=30),
-    Loan.mortgage(Money.from_float(450000.0), InterestRate.from_percent(6.0), term_years=30),
-    Loan.auto_loan(Money.from_float(35000.0), InterestRate.from_percent(5.5), term_months=60),
-    Loan.personal_loan(Money.from_float(15000.0), InterestRate.from_percent(10.0), term_months=48),
+    Loan.mortgage(Money(300000.0), InterestRate(0.065), term=30),
+    Loan.mortgage(Money(450000.0), InterestRate(0.06), term=30),
+    Loan.auto_loan(Money(35000.0), InterestRate(0.055), term=60),
+    Loan.personal_loan(Money(15000.0), InterestRate(0.10), term=48),
 ]
 
 # Apply behavioral assumptions
 prepay_curve = PrepaymentCurve.constant_cpr(0.12)  # 12% CPR
 discount_curve = FlatDiscountCurve(
-    InterestRate.from_percent(5.0),
+    InterestRate(0.05),
     valuation_date=date(2024, 1, 1)
 )
 
@@ -783,9 +784,9 @@ from datetime import date
 
 # Create a 30-year mortgage
 loan = Loan.mortgage(
-    principal=Money.from_float(300000.0),
-    annual_rate=InterestRate.from_percent(6.5),
-    term_years=30,
+    principal=Money(300000.0),
+    annual_rate=InterestRate(0.065),
+    term=30,
     origination_date=date(2024, 1, 1),
 )
 
@@ -803,7 +804,7 @@ print(f"Total interest: {total_interest}")
 
 # Value the loan at market rate
 market_curve = FlatDiscountCurve(
-    InterestRate.from_percent(5.5),
+    InterestRate(0.055),
     valuation_date=date(2024, 1, 1)
 )
 npv = schedule.present_value(market_curve)
