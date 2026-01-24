@@ -1,6 +1,6 @@
-# credkit
+# credkit 0.5.0
 
-**An open toolbox for credit modeling in Python**
+**An experimental open toolbox for credit modeling in Python**
 
 Credkit provides elegant, type-safe primitives for building credit models that
 typically force teams to reach for Excel. From consumer loans to portfolio
@@ -51,9 +51,22 @@ market_curve = FlatDiscountCurve(
     valuation_date=date(2024, 1, 1)
 )
 npv = schedule.present_value(market_curve)
+
+# Build a portfolio of loans
+from credkit.portfolio import Portfolio
+
+loans = [
+    Loan.mortgage(Money(300000), InterestRate(0.065), origination_date=date(2024, 1, 1)),
+    Loan.mortgage(Money(250000), InterestRate(0.0625), origination_date=date(2024, 3, 1)),
+]
+portfolio = Portfolio.from_loans(loans, name="Q1 2024 Originations")
+
+# Portfolio metrics
+wac = portfolio.weighted_average_coupon()  # ~6.39%
+pool_npv = portfolio.present_value(market_curve)
 ```
 
-See [EXAMPLES.md](EXAMPLES.md) for more comprehensive examples of all features.
+See [cookbook](./docs/cookbook.md) for more comprehensive examples of all features.
 
 ## Core Features
 
@@ -83,13 +96,20 @@ See [EXAMPLES.md](EXAMPLES.md) for more comprehensive examples of all features.
 - **Schedules**: Generate complete payment schedules with principal/interest breakdown
 - **Integration**: Full end-to-end from loan creation to NPV calculation
 
+### Portfolio (`credkit.portfolio`)
+
+- **Portfolio**: Aggregate multiple loans into pools with weighted metrics
+- **Positions**: Track ownership with position IDs and partial ownership factors
+- **Weighted averages**: WAC (coupon), WAM (maturity), WALA (age), pool factor
+- **Valuation**: Portfolio-level NPV, YTM, WAL, duration, and convexity
+
 ## Features
 
 - **Immutable by default**: All core types are frozen dataclasses
 - **Float64 precision**: Standard IEEE 754 double precision with appropriate rounding
 - **Type safety**: Full type hints with `py.typed` marker
 - **Composable**: Build complex models from simple primitives
-- **Tested**: 184 passing tests with comprehensive coverage
+- **Tested**: 225 passing tests with comprehensive coverage
 
 ## Numeric Precision
 
@@ -111,23 +131,24 @@ places for USD
 
 ## Documentation
 
-- **[EXAMPLES.md](EXAMPLES.md)**: Comprehensive code examples for all modules
+- **[Cookbook](./docs/cookbook.md)**: Comprehensive code examples for all modules
+- **[Examples](./examples/)**: End-to-end workflow scripts
 
 ## Requirements
 
 - Python 3.13+
-- No runtime dependencies (uses only standard library)
+- [pyxirr](https://github.com/Anexen/pyxirr) - fast financial calculations (XIRR/IRR)
 
 ## Development
 
 ```bash
 # Clone and setup
 git clone https://github.com/jt-hill/credkit.git
-cd credkit/core-classes
+cd credkit/
 uv sync --dev
 
 # Run tests
-uv run pytest tests/ -v  # All 184 tests should pass
+uv run pytest tests/ -v  # All 225 tests should pass
 ```
 
 ## Contributing

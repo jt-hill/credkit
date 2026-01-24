@@ -54,6 +54,10 @@ from .behavior import (
     apply_default_curve_simple,
     calculate_outstanding_balance,
 )
+from .portfolio import (
+    Portfolio,
+    PortfolioPosition,
+)
 
 __version__ = "0.3.0"
 
@@ -95,4 +99,7 @@ __all__ = [
     "apply_default_scenario",
     "apply_default_curve_simple",
     "calculate_outstanding_balance",
+    # Portfolio module
+    "Portfolio",
+    "PortfolioPosition",
 ]
