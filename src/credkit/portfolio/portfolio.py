@@ -11,6 +11,7 @@ from ..cashflow import CashFlow, CashFlowSchedule
 from ..cashflow.discount import DiscountCurve
 from ..instruments import Loan
 from ..money import Money
+from .repline import RepLine
 
 if TYPE_CHECKING:
     from typing import Self
@@ -19,19 +20,19 @@ if TYPE_CHECKING:
 @dataclass(frozen=True)
 class PortfolioPosition:
     """
-    Represents a position in a loan within a portfolio.
+    Represents a position in a loan or representative line within a portfolio.
 
-    Wraps a Loan with portfolio-specific metadata: identifier and ownership
-    factor. Enables partial ownership tracking for participations.
+    Wraps a Loan or RepLine with portfolio-specific metadata: identifier and
+    ownership factor. Enables partial ownership tracking for participations.
 
     Attributes:
-        loan: The underlying loan instrument.
+        loan: The underlying loan instrument or representative line.
         position_id: Unique identifier for this position within the portfolio.
         factor: Ownership factor (0.0 to 1.0]. Default is 1.0 (full ownership).
     """
 
-    loan: Loan
-    """The underlying loan instrument."""
+    loan: Loan | RepLine
+    """The underlying loan instrument or representative line."""
 
     position_id: str
     """Unique identifier for this position within the portfolio."""
@@ -45,9 +46,9 @@ class PortfolioPosition:
 
     def __post_init__(self) -> None:
         """Validate position parameters."""
-        # Validate loan
-        if not isinstance(self.loan, Loan):
-            raise TypeError(f"loan must be Loan, got {type(self.loan)}")
+        # Validate loan (accepts Loan or RepLine)
+        if not isinstance(self.loan, (Loan, RepLine)):
+            raise TypeError(f"loan must be Loan or RepLine, got {type(self.loan)}")
 
         # Validate position_id
         if not isinstance(self.position_id, str):

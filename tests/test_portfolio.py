@@ -227,16 +227,6 @@ class TestPortfolioCreation:
         with pytest.raises(ValueError, match="unique"):
             Portfolio.from_list([pos1, pos2])
 
-    @pytest.mark.skip(reason="Credkit only supports USD currently - Currency is enum-based")
-    def test_mixed_currency_raises(self):
-        """Test that mixed currencies raise error.
-
-        Note: This test is skipped because credkit currently only supports USD.
-        When multi-currency support is added, this test should validate that
-        portfolios reject positions with mixed currencies.
-        """
-        pass
-
     def test_sequence_protocol(self):
         """Test that Portfolio implements sequence protocol."""
         loan1 = make_mortgage(300000, 0.065, date(2024, 1, 1))
@@ -465,7 +455,9 @@ class TestPortfolioValuation:
 
         portfolio = Portfolio.from_loans([loan1, loan2])
 
-        curve = FlatDiscountCurve(rate=InterestRate(0.05), valuation_date=date(2024, 1, 1))
+        curve = FlatDiscountCurve(
+            rate=InterestRate(0.05), valuation_date=date(2024, 1, 1)
+        )
         pv = portfolio.present_value(curve)
 
         # PV should be positive
@@ -518,7 +510,9 @@ class TestPortfolioValuation:
 
         portfolio = Portfolio.from_loans([loan1, loan2])
 
-        curve = FlatDiscountCurve(rate=InterestRate(0.05), valuation_date=date(2024, 1, 1))
+        curve = FlatDiscountCurve(
+            rate=InterestRate(0.05), valuation_date=date(2024, 1, 1)
+        )
 
         # Modified duration
         mod_dur = portfolio.duration(curve, modified=True)
@@ -624,7 +618,9 @@ class TestPortfolioIntegration:
         assert len(schedule) > 0
 
         # Valuation
-        curve = FlatDiscountCurve(rate=InterestRate(0.05), valuation_date=date(2024, 1, 1))
+        curve = FlatDiscountCurve(
+            rate=InterestRate(0.05), valuation_date=date(2024, 1, 1)
+        )
         pv = portfolio.present_value(curve)
         assert pv.amount > 0
 
