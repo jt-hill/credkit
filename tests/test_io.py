@@ -1,4 +1,4 @@
-"""Tests for credkit.io DataFrame import/export functionality."""
+"""Tests for DataFrame import/export via to_dict/from_dict/to_dataframe/from_dataframe."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ import pytest
 
 from credkit import (
     AmortizationType,
+    CashFlowSchedule,
     InterestRate,
     Loan,
     Money,
@@ -20,22 +21,6 @@ from credkit.money import CompoundingConvention, USD
 from credkit.portfolio import Portfolio, PortfolioPosition
 from credkit.portfolio.repline import RepLine, StratificationCriteria
 from credkit.temporal import DayCountBasis, DayCountConvention, TimeUnit
-from credkit.io import (
-    loans_from_pandas,
-    loans_from_polars,
-    loans_to_pandas,
-    loans_to_polars,
-    portfolio_from_pandas,
-    portfolio_from_polars,
-    portfolio_to_pandas,
-    portfolio_to_polars,
-    replines_from_pandas,
-    replines_from_polars,
-    replines_to_pandas,
-    replines_to_polars,
-    schedule_to_pandas,
-    schedule_to_polars,
-)
 
 
 # ---------------------------------------------------------------------------
@@ -119,46 +104,35 @@ def sample_repline_no_strat() -> RepLine:
 
 
 # ===================================================================
-# Loan export tests
+# Loan.to_dict() tests
 # ===================================================================
 
 
-class TestLoansExportPandas:
-    """Test loans_to_pandas."""
+class TestLoanToDict:
+    """Test Loan.to_dict()."""
 
-    def test_empty_list(self) -> None:
-        df = loans_to_pandas([])
-        assert isinstance(df, pd.DataFrame)
-        assert len(df) == 0
-
-    def test_single_loan(self, sample_loan: Loan) -> None:
-        df = loans_to_pandas([sample_loan])
-        assert len(df) == 1
-        row = df.iloc[0]
-        assert row["principal"] == 300000.0
-        assert row["currency"] == "USD"
-        assert row["annual_rate"] == 0.065
-        assert row["compounding"] == "MONTHLY"
-        assert row["day_count"] == "ACT/365"
-        assert row["term"] == "360M"
-        assert row["payment_frequency"] == "MONTHLY"
-        assert row["amortization_type"] == "LEVEL_PAYMENT"
-        assert row["origination_date"] == date(2024, 1, 1)
-        assert row["first_payment_date"] is None
-
-    def test_multiple_loans(self, sample_loans: list[Loan]) -> None:
-        df = loans_to_pandas(sample_loans)
-        assert len(df) == 3
+    def test_basic_fields(self, sample_loan: Loan) -> None:
+        d = sample_loan.to_dict()
+        assert d["principal"] == 300000.0
+        assert d["currency"] == "USD"
+        assert d["annual_rate"] == 0.065
+        assert d["compounding"] == "MONTHLY"
+        assert d["day_count"] == "ACT/365"
+        assert d["term"] == "360M"
+        assert d["payment_frequency"] == "MONTHLY"
+        assert d["amortization_type"] == "LEVEL_PAYMENT"
+        assert d["origination_date"] == date(2024, 1, 1)
+        assert d["first_payment_date"] is None
 
     def test_first_payment_date_preserved(
         self, sample_loan_with_first_payment: Loan
     ) -> None:
-        df = loans_to_pandas([sample_loan_with_first_payment])
-        assert df.iloc[0]["first_payment_date"] == date(2024, 8, 1)
+        d = sample_loan_with_first_payment.to_dict()
+        assert d["first_payment_date"] == date(2024, 8, 1)
 
     def test_column_names(self, sample_loan: Loan) -> None:
-        df = loans_to_pandas([sample_loan])
-        expected_cols = {
+        d = sample_loan.to_dict()
+        expected_keys = {
             "principal",
             "currency",
             "annual_rate",
@@ -170,51 +144,22 @@ class TestLoansExportPandas:
             "origination_date",
             "first_payment_date",
         }
-        assert set(df.columns) == expected_cols
-
-
-class TestLoansExportPolars:
-    """Test loans_to_polars."""
-
-    def test_empty_list(self) -> None:
-        df = loans_to_polars([])
-        assert isinstance(df, pl.DataFrame)
-        assert len(df) == 0
-
-    def test_single_loan(self, sample_loan: Loan) -> None:
-        df = loans_to_polars([sample_loan])
-        assert len(df) == 1
-        row = df.to_dicts()[0]
-        assert row["principal"] == 300000.0
-        assert row["currency"] == "USD"
-        assert row["annual_rate"] == 0.065
-        assert row["compounding"] == "MONTHLY"
-        assert row["day_count"] == "ACT/365"
-        assert row["term"] == "360M"
-        assert row["payment_frequency"] == "MONTHLY"
-        assert row["amortization_type"] == "LEVEL_PAYMENT"
-        assert row["origination_date"] == date(2024, 1, 1)
-        assert row["first_payment_date"] is None
-
-    def test_multiple_loans(self, sample_loans: list[Loan]) -> None:
-        df = loans_to_polars(sample_loans)
-        assert len(df) == 3
+        assert set(d.keys()) == expected_keys
 
 
 # ===================================================================
-# Loan import tests
+# Loan.from_dict() tests
 # ===================================================================
 
 
-class TestLoansImportPandas:
-    """Test loans_from_pandas."""
+class TestLoanFromDict:
+    """Test Loan.from_dict()."""
 
     def test_round_trip(self, sample_loans: list[Loan]) -> None:
         """Export and re-import should preserve all fields."""
-        df = loans_to_pandas(sample_loans)
-        result = loans_from_pandas(df)
-        assert len(result) == len(sample_loans)
-        for orig, imported in zip(sample_loans, result):
+        for orig in sample_loans:
+            d = orig.to_dict()
+            imported = Loan.from_dict(d)
             assert imported.principal == orig.principal
             assert imported.annual_rate.rate == orig.annual_rate.rate
             assert imported.annual_rate.compounding == orig.annual_rate.compounding
@@ -232,88 +177,69 @@ class TestLoansImportPandas:
 
     def test_missing_optional_columns_defaults(self) -> None:
         """Import with minimal columns uses defaults."""
-        df = pd.DataFrame(
-            [
-                {
-                    "principal": 100000.0,
-                    "annual_rate": 0.05,
-                    "term": "360M",
-                    "payment_frequency": "MONTHLY",
-                    "amortization_type": "LEVEL_PAYMENT",
-                    "origination_date": date(2024, 1, 1),
-                }
-            ]
-        )
-        result = loans_from_pandas(df)
-        assert len(result) == 1
-        loan = result[0]
+        d = {
+            "principal": 100000.0,
+            "annual_rate": 0.05,
+            "term": "360M",
+            "payment_frequency": "MONTHLY",
+            "amortization_type": "LEVEL_PAYMENT",
+            "origination_date": date(2024, 1, 1),
+        }
+        loan = Loan.from_dict(d)
         assert loan.principal.currency == USD
         assert loan.annual_rate.compounding == CompoundingConvention.MONTHLY
         assert loan.annual_rate.day_count.convention == DayCountConvention.ACTUAL_365
         assert loan.first_payment_date is None
 
-    def test_missing_required_column_raises(self) -> None:
-        """Missing required column raises ValueError."""
-        df = pd.DataFrame([{"principal": 100000.0, "annual_rate": 0.05}])
-        with pytest.raises(ValueError, match="Missing required columns"):
-            loans_from_pandas(df)
+    def test_missing_required_field_raises(self) -> None:
+        """Missing required field raises ValueError listing all missing fields."""
+        d = {"principal": 100000.0, "annual_rate": 0.05}
+        with pytest.raises(ValueError, match="Missing required fields for Loan"):
+            Loan.from_dict(d)
 
-    def test_invalid_data_raises_with_row_index(self) -> None:
-        """Invalid data includes row index in error."""
-        df = pd.DataFrame(
-            [
-                {
-                    "principal": -100.0,
-                    "annual_rate": 0.05,
-                    "term": "360M",
-                    "payment_frequency": "MONTHLY",
-                    "amortization_type": "LEVEL_PAYMENT",
-                    "origination_date": date(2024, 1, 1),
-                }
-            ]
-        )
-        with pytest.raises(ValueError, match="row 0"):
-            loans_from_pandas(df)
+    def test_invalid_data_raises(self) -> None:
+        """Invalid data raises ValueError."""
+        d = {
+            "principal": -100.0,
+            "annual_rate": 0.05,
+            "term": "360M",
+            "payment_frequency": "MONTHLY",
+            "amortization_type": "LEVEL_PAYMENT",
+            "origination_date": date(2024, 1, 1),
+        }
+        with pytest.raises(ValueError):
+            Loan.from_dict(d)
 
     def test_custom_defaults(self) -> None:
         """Custom default parameters are applied."""
-        df = pd.DataFrame(
-            [
-                {
-                    "principal": 100000.0,
-                    "annual_rate": 0.05,
-                    "term": "360M",
-                    "payment_frequency": "MONTHLY",
-                    "amortization_type": "LEVEL_PAYMENT",
-                    "origination_date": date(2024, 1, 1),
-                }
-            ]
-        )
-        result = loans_from_pandas(
-            df,
+        d = {
+            "principal": 100000.0,
+            "annual_rate": 0.05,
+            "term": "360M",
+            "payment_frequency": "MONTHLY",
+            "amortization_type": "LEVEL_PAYMENT",
+            "origination_date": date(2024, 1, 1),
+        }
+        loan = Loan.from_dict(
+            d,
             default_compounding="ANNUAL",
             default_day_count="30/360",
         )
-        loan = result[0]
         assert loan.annual_rate.compounding == CompoundingConvention.ANNUAL
         assert loan.annual_rate.day_count.convention == DayCountConvention.THIRTY_360
 
     def test_date_string_import(self) -> None:
         """ISO date strings are parsed correctly."""
-        df = pd.DataFrame(
-            [
-                {
-                    "principal": 100000.0,
-                    "annual_rate": 0.05,
-                    "term": "360M",
-                    "payment_frequency": "MONTHLY",
-                    "amortization_type": "LEVEL_PAYMENT",
-                    "origination_date": "2024-01-15",
-                }
-            ]
-        )
-        result = loans_from_pandas(df)
-        assert result[0].origination_date == date(2024, 1, 15)
+        d = {
+            "principal": 100000.0,
+            "annual_rate": 0.05,
+            "term": "360M",
+            "payment_frequency": "MONTHLY",
+            "amortization_type": "LEVEL_PAYMENT",
+            "origination_date": "2024-01-15",
+        }
+        loan = Loan.from_dict(d)
+        assert loan.origination_date == date(2024, 1, 15)
 
     def test_all_amortization_types(self) -> None:
         """All amortization types round-trip correctly."""
@@ -331,24 +257,74 @@ class TestLoansImportPandas:
                 amortization_type=amort_type,
                 origination_date=date(2024, 1, 1),
             )
-            df = loans_to_pandas([loan])
-            result = loans_from_pandas(df)
-            assert result[0].amortization_type == amort_type
+            imported = Loan.from_dict(loan.to_dict())
+            assert imported.amortization_type == amort_type
 
 
-class TestLoansImportPolars:
-    """Test loans_from_polars."""
+# ===================================================================
+# Loan DataFrame round-trip (pandas)
+# ===================================================================
+
+
+class TestLoanDataFramePandas:
+    """Test Loan round-trip via pandas DataFrame."""
 
     def test_round_trip(self, sample_loans: list[Loan]) -> None:
-        """Export and re-import should preserve all fields."""
-        df = loans_to_polars(sample_loans)
-        result = loans_from_polars(df)
+        df = pd.DataFrame([loan.to_dict() for loan in sample_loans])
+        result = [Loan.from_dict(r) for r in df.to_dict(orient="records")]
         assert len(result) == len(sample_loans)
         for orig, imported in zip(sample_loans, result):
             assert imported.principal == orig.principal
             assert imported.annual_rate.rate == orig.annual_rate.rate
             assert imported.origination_date == orig.origination_date
             assert imported.first_payment_date == orig.first_payment_date
+
+    def test_empty_list(self) -> None:
+        df = pd.DataFrame([loan.to_dict() for loan in []])
+        assert isinstance(df, pd.DataFrame)
+        assert len(df) == 0
+
+    def test_single_loan(self, sample_loan: Loan) -> None:
+        df = pd.DataFrame([sample_loan.to_dict()])
+        assert len(df) == 1
+        row = df.iloc[0]
+        assert row["principal"] == 300000.0
+        assert row["currency"] == "USD"
+
+    def test_multiple_loans(self, sample_loans: list[Loan]) -> None:
+        df = pd.DataFrame([loan.to_dict() for loan in sample_loans])
+        assert len(df) == 3
+
+
+# ===================================================================
+# Loan DataFrame round-trip (polars)
+# ===================================================================
+
+
+class TestLoanDataFramePolars:
+    """Test Loan round-trip via polars DataFrame."""
+
+    def test_round_trip(self, sample_loans: list[Loan]) -> None:
+        df = pl.DataFrame([loan.to_dict() for loan in sample_loans])
+        result = [Loan.from_dict(r) for r in df.to_dicts()]
+        assert len(result) == len(sample_loans)
+        for orig, imported in zip(sample_loans, result):
+            assert imported.principal == orig.principal
+            assert imported.annual_rate.rate == orig.annual_rate.rate
+            assert imported.origination_date == orig.origination_date
+            assert imported.first_payment_date == orig.first_payment_date
+
+    def test_empty_list(self) -> None:
+        df = pl.DataFrame([loan.to_dict() for loan in []])
+        assert isinstance(df, pl.DataFrame)
+        assert len(df) == 0
+
+    def test_single_loan(self, sample_loan: Loan) -> None:
+        df = pl.DataFrame([sample_loan.to_dict()])
+        assert len(df) == 1
+        row = df.to_dicts()[0]
+        assert row["principal"] == 300000.0
+        assert row["currency"] == "USD"
 
     def test_missing_optional_columns_defaults(self) -> None:
         """Import with minimal columns uses defaults."""
@@ -364,15 +340,9 @@ class TestLoansImportPolars:
                 }
             ]
         )
-        result = loans_from_polars(df)
+        result = [Loan.from_dict(r) for r in df.to_dicts()]
         assert len(result) == 1
         assert result[0].principal.currency == USD
-
-    def test_missing_required_column_raises(self) -> None:
-        """Missing required column raises ValueError."""
-        df = pl.DataFrame([{"principal": 100000.0, "annual_rate": 0.05}])
-        with pytest.raises(ValueError, match="Missing required columns"):
-            loans_from_polars(df)
 
 
 # ===================================================================
@@ -381,11 +351,11 @@ class TestLoansImportPolars:
 
 
 class TestScheduleExportPandas:
-    """Test schedule_to_pandas."""
+    """Test CashFlowSchedule.to_dataframe(backend='pandas')."""
 
     def test_basic_export(self, sample_loan: Loan) -> None:
         schedule = sample_loan.generate_schedule()
-        df = schedule_to_pandas(schedule)
+        df = schedule.to_dataframe(backend="pandas")
         assert isinstance(df, pd.DataFrame)
         assert len(df) == len(schedule)
         expected_cols = {"date", "amount", "currency", "type", "description"}
@@ -394,108 +364,79 @@ class TestScheduleExportPandas:
     def test_cash_flow_types(self, sample_loan: Loan) -> None:
         """All cash flow types appear in output."""
         schedule = sample_loan.generate_schedule()
-        df = schedule_to_pandas(schedule)
+        df = schedule.to_dataframe(backend="pandas")
         types = set(df["type"].unique())
         assert "PRINCIPAL" in types
         assert "INTEREST" in types
 
     def test_amounts_are_numeric(self, sample_loan: Loan) -> None:
         schedule = sample_loan.generate_schedule()
-        df = schedule_to_pandas(schedule)
+        df = schedule.to_dataframe(backend="pandas")
         assert df["amount"].dtype == "float64"
 
     def test_empty_schedule(self) -> None:
-        from credkit.cashflow import CashFlowSchedule
-
         empty = CashFlowSchedule.empty()
-        df = schedule_to_pandas(empty)
+        df = empty.to_dataframe(backend="pandas")
         assert len(df) == 0
 
 
 class TestScheduleExportPolars:
-    """Test schedule_to_polars."""
+    """Test CashFlowSchedule.to_dataframe(backend='polars')."""
 
     def test_basic_export(self, sample_loan: Loan) -> None:
         schedule = sample_loan.generate_schedule()
-        df = schedule_to_polars(schedule)
+        df = schedule.to_dataframe(backend="polars")
         assert isinstance(df, pl.DataFrame)
         assert len(df) == len(schedule)
 
     def test_column_names(self, sample_loan: Loan) -> None:
         schedule = sample_loan.generate_schedule()
-        df = schedule_to_polars(schedule)
+        df = schedule.to_dataframe(backend="polars")
         expected_cols = {"date", "amount", "currency", "type", "description"}
         assert set(df.columns) == expected_cols
 
 
 # ===================================================================
-# RepLine export tests
+# RepLine.to_dict() / from_dict() tests
 # ===================================================================
 
 
-class TestRepLinesExportPandas:
-    """Test replines_to_pandas."""
+class TestRepLineToDict:
+    """Test RepLine.to_dict()."""
 
-    def test_single_repline_with_strat(self, sample_repline: RepLine) -> None:
-        df = replines_to_pandas([sample_repline])
-        assert len(df) == 1
-        row = df.iloc[0]
-        assert row["principal"] == 300000.0
-        assert row["total_balance"] == 1500000.0
-        assert row["loan_count"] == 5
-        assert row["rate_bucket_min"] == 0.06
-        assert row["rate_bucket_max"] == 0.07
-        assert row["term_bucket_min"] == 348
-        assert row["term_bucket_max"] == 360
-        assert row["vintage"] == "2024-Q1"
-        assert row["product_type"] == "mortgage"
+    def test_with_strat(self, sample_repline: RepLine) -> None:
+        d = sample_repline.to_dict()
+        assert d["principal"] == 300000.0
+        assert d["total_balance"] == 1500000.0
+        assert d["loan_count"] == 5
+        assert d["rate_bucket_min"] == 0.06
+        assert d["rate_bucket_max"] == 0.07
+        assert d["term_bucket_min"] == 348
+        assert d["term_bucket_max"] == 360
+        assert d["vintage"] == "2024-Q1"
+        assert d["product_type"] == "mortgage"
 
-    def test_repline_without_strat(self, sample_repline_no_strat: RepLine) -> None:
-        df = replines_to_pandas([sample_repline_no_strat])
-        row = df.iloc[0]
-        assert row["total_balance"] == 500000.0
-        assert row["loan_count"] == 20
-        assert row["rate_bucket_min"] is None
-        assert row["vintage"] is None
-
-    def test_empty_list(self) -> None:
-        df = replines_to_pandas([])
-        assert len(df) == 0
+    def test_without_strat(self, sample_repline_no_strat: RepLine) -> None:
+        d = sample_repline_no_strat.to_dict()
+        assert d["total_balance"] == 500000.0
+        assert d["loan_count"] == 20
+        assert d["rate_bucket_min"] is None
+        assert d["vintage"] is None
 
     def test_column_names(self, sample_repline: RepLine) -> None:
-        df = replines_to_pandas([sample_repline])
-        # Should have all loan columns plus repline-specific columns
-        assert "principal" in df.columns
-        assert "total_balance" in df.columns
-        assert "loan_count" in df.columns
-        assert "rate_bucket_min" in df.columns
+        d = sample_repline.to_dict()
+        assert "principal" in d
+        assert "total_balance" in d
+        assert "loan_count" in d
+        assert "rate_bucket_min" in d
 
 
-class TestRepLinesExportPolars:
-    """Test replines_to_polars."""
-
-    def test_single_repline(self, sample_repline: RepLine) -> None:
-        df = replines_to_polars([sample_repline])
-        assert isinstance(df, pl.DataFrame)
-        assert len(df) == 1
-        row = df.to_dicts()[0]
-        assert row["total_balance"] == 1500000.0
-        assert row["loan_count"] == 5
-
-
-# ===================================================================
-# RepLine import tests
-# ===================================================================
-
-
-class TestRepLinesImportPandas:
-    """Test replines_from_pandas."""
+class TestRepLineFromDict:
+    """Test RepLine.from_dict()."""
 
     def test_round_trip_with_strat(self, sample_repline: RepLine) -> None:
-        df = replines_to_pandas([sample_repline])
-        result = replines_from_pandas(df)
-        assert len(result) == 1
-        rep = result[0]
+        d = sample_repline.to_dict()
+        rep = RepLine.from_dict(d)
         assert rep.total_balance == sample_repline.total_balance
         assert rep.loan_count == sample_repline.loan_count
         assert rep.loan.principal == sample_repline.loan.principal
@@ -507,61 +448,94 @@ class TestRepLinesImportPandas:
         assert rep.stratification.product_type == "mortgage"
 
     def test_round_trip_without_strat(self, sample_repline_no_strat: RepLine) -> None:
-        df = replines_to_pandas([sample_repline_no_strat])
-        result = replines_from_pandas(df)
-        assert len(result) == 1
-        rep = result[0]
+        d = sample_repline_no_strat.to_dict()
+        rep = RepLine.from_dict(d)
         assert rep.total_balance == sample_repline_no_strat.total_balance
         assert rep.loan_count == sample_repline_no_strat.loan_count
         assert rep.stratification is None
 
-    def test_missing_required_column_raises(self) -> None:
-        df = pd.DataFrame([{"principal": 100000.0, "annual_rate": 0.05}])
-        with pytest.raises(ValueError, match="Missing required columns"):
-            replines_from_pandas(df)
+    def test_missing_required_field_raises(self) -> None:
+        """Missing total_balance/loan_count raises ValueError."""
+        d = {
+            "principal": 100000.0,
+            "annual_rate": 0.05,
+            "term": "360M",
+            "payment_frequency": "MONTHLY",
+            "amortization_type": "LEVEL_PAYMENT",
+            "origination_date": date(2024, 1, 1),
+        }
+        with pytest.raises(ValueError):
+            RepLine.from_dict(d)
 
 
-class TestRepLinesImportPolars:
-    """Test replines_from_polars."""
+# ===================================================================
+# RepLine DataFrame round-trips
+# ===================================================================
+
+
+class TestRepLineDataFramePandas:
+    """Test RepLine round-trip via pandas DataFrame."""
 
     def test_round_trip(self, sample_repline: RepLine) -> None:
-        df = replines_to_polars([sample_repline])
-        result = replines_from_polars(df)
+        df = pd.DataFrame([sample_repline.to_dict()])
+        result = [RepLine.from_dict(r) for r in df.to_dict(orient="records")]
+        assert len(result) == 1
+        rep = result[0]
+        assert rep.total_balance == sample_repline.total_balance
+        assert rep.loan_count == sample_repline.loan_count
+
+    def test_empty_list(self) -> None:
+        df = pd.DataFrame([rep.to_dict() for rep in []])
+        assert len(df) == 0
+
+    def test_round_trip_without_strat(self, sample_repline_no_strat: RepLine) -> None:
+        df = pd.DataFrame([sample_repline_no_strat.to_dict()])
+        result = [RepLine.from_dict(r) for r in df.to_dict(orient="records")]
+        rep = result[0]
+        assert rep.total_balance == sample_repline_no_strat.total_balance
+        assert rep.stratification is None
+
+
+class TestRepLineDataFramePolars:
+    """Test RepLine round-trip via polars DataFrame."""
+
+    def test_round_trip(self, sample_repline: RepLine) -> None:
+        df = pl.DataFrame([sample_repline.to_dict()])
+        result = [RepLine.from_dict(r) for r in df.to_dicts()]
         assert len(result) == 1
         rep = result[0]
         assert rep.total_balance == sample_repline.total_balance
         assert rep.loan_count == sample_repline.loan_count
 
     def test_round_trip_without_strat(self, sample_repline_no_strat: RepLine) -> None:
-        df = replines_to_polars([sample_repline_no_strat])
-        result = replines_from_polars(df)
+        df = pl.DataFrame([sample_repline_no_strat.to_dict()])
+        result = [RepLine.from_dict(r) for r in df.to_dicts()]
         rep = result[0]
         assert rep.stratification is None
 
 
 # ===================================================================
-# Portfolio export tests
+# Portfolio.to_dataframe() tests
 # ===================================================================
 
 
-class TestPortfolioExportPandas:
-    """Test portfolio_to_pandas."""
+class TestPortfolioToDataFramePandas:
+    """Test Portfolio.to_dataframe(backend='pandas')."""
 
     def test_loan_portfolio(self, sample_loans: list[Loan]) -> None:
         portfolio = Portfolio.from_loans(sample_loans, name="Test")
-        df = portfolio_to_pandas(portfolio)
+        df = portfolio.to_dataframe(backend="pandas")
         assert isinstance(df, pd.DataFrame)
         assert len(df) == 3
         assert "position_id" in df.columns
         assert "factor" in df.columns
-        # Check position IDs were exported
         assert df.iloc[0]["position_id"] == "POS-0001"
         assert df.iloc[0]["factor"] == 1.0
 
     def test_partial_ownership(self, sample_loan: Loan) -> None:
         pos = PortfolioPosition(loan=sample_loan, position_id="PART-001", factor=0.5)
         portfolio = Portfolio.from_list([pos])
-        df = portfolio_to_pandas(portfolio)
+        df = portfolio.to_dataframe(backend="pandas")
         assert df.iloc[0]["factor"] == 0.5
         # Principal in the DataFrame is the loan's principal, not scaled
         assert df.iloc[0]["principal"] == 300000.0
@@ -573,7 +547,7 @@ class TestPortfolioExportPandas:
         pos_loan = PortfolioPosition(loan=sample_loan, position_id="LOAN-001")
         pos_rep = PortfolioPosition(loan=sample_repline, position_id="REP-001")
         portfolio = Portfolio.from_list([pos_loan, pos_rep])
-        df = portfolio_to_pandas(portfolio)
+        df = portfolio.to_dataframe(backend="pandas")
         assert len(df) == 2
 
         # Loan row should have null repline columns
@@ -587,32 +561,32 @@ class TestPortfolioExportPandas:
 
     def test_empty_portfolio(self) -> None:
         portfolio = Portfolio.empty(name="Empty")
-        df = portfolio_to_pandas(portfolio)
+        df = portfolio.to_dataframe(backend="pandas")
         assert len(df) == 0
 
 
-class TestPortfolioExportPolars:
-    """Test portfolio_to_polars."""
+class TestPortfolioToDataFramePolars:
+    """Test Portfolio.to_dataframe(backend='polars')."""
 
     def test_basic_export(self, sample_loans: list[Loan]) -> None:
         portfolio = Portfolio.from_loans(sample_loans)
-        df = portfolio_to_polars(portfolio)
+        df = portfolio.to_dataframe(backend="polars")
         assert isinstance(df, pl.DataFrame)
         assert len(df) == 3
 
 
 # ===================================================================
-# Portfolio import tests
+# Portfolio.from_dataframe() tests
 # ===================================================================
 
 
-class TestPortfolioImportPandas:
-    """Test portfolio_from_pandas."""
+class TestPortfolioFromDataFramePandas:
+    """Test Portfolio.from_dataframe() with pandas."""
 
     def test_loan_round_trip(self, sample_loans: list[Loan]) -> None:
         portfolio = Portfolio.from_loans(sample_loans, name="Test")
-        df = portfolio_to_pandas(portfolio)
-        result = portfolio_from_pandas(df, name="Test")
+        df = portfolio.to_dataframe(backend="pandas")
+        result = Portfolio.from_dataframe(df, name="Test")
         assert len(result) == 3
         assert result.name == "Test"
         for orig_pos, imported_pos in zip(portfolio, result):
@@ -628,8 +602,8 @@ class TestPortfolioImportPandas:
         pos_loan = PortfolioPosition(loan=sample_loan, position_id="LOAN-001")
         pos_rep = PortfolioPosition(loan=sample_repline, position_id="REP-001")
         portfolio = Portfolio.from_list([pos_loan, pos_rep])
-        df = portfolio_to_pandas(portfolio)
-        result = portfolio_from_pandas(df)
+        df = portfolio.to_dataframe(backend="pandas")
+        result = Portfolio.from_dataframe(df)
 
         # First position should be a Loan
         assert isinstance(result[0].loan, Loan)
@@ -661,7 +635,7 @@ class TestPortfolioImportPandas:
                 },
             ]
         )
-        result = portfolio_from_pandas(df)
+        result = Portfolio.from_dataframe(df)
         assert result[0].position_id == "POS-0001"
         assert result[1].position_id == "POS-0002"
 
@@ -680,24 +654,24 @@ class TestPortfolioImportPandas:
                 }
             ]
         )
-        result = portfolio_from_pandas(df)
+        result = Portfolio.from_dataframe(df)
         assert result[0].factor == 1.0
 
     def test_partial_factor_preserved(self, sample_loan: Loan) -> None:
         pos = PortfolioPosition(loan=sample_loan, position_id="P1", factor=0.75)
         portfolio = Portfolio.from_list([pos])
-        df = portfolio_to_pandas(portfolio)
-        result = portfolio_from_pandas(df)
+        df = portfolio.to_dataframe(backend="pandas")
+        result = Portfolio.from_dataframe(df)
         assert abs(result[0].factor - 0.75) < 0.0001
 
 
-class TestPortfolioImportPolars:
-    """Test portfolio_from_polars."""
+class TestPortfolioFromDataFramePolars:
+    """Test Portfolio.from_dataframe() with polars."""
 
     def test_loan_round_trip(self, sample_loans: list[Loan]) -> None:
         portfolio = Portfolio.from_loans(sample_loans)
-        df = portfolio_to_polars(portfolio)
-        result = portfolio_from_polars(df)
+        df = portfolio.to_dataframe(backend="polars")
+        result = Portfolio.from_dataframe(df)
         assert len(result) == 3
         for orig_pos, imported_pos in zip(portfolio, result):
             assert imported_pos.position_id == orig_pos.position_id
@@ -709,8 +683,8 @@ class TestPortfolioImportPolars:
         pos_loan = PortfolioPosition(loan=sample_loan, position_id="LOAN-001")
         pos_rep = PortfolioPosition(loan=sample_repline, position_id="REP-001")
         portfolio = Portfolio.from_list([pos_loan, pos_rep])
-        df = portfolio_to_polars(portfolio)
-        result = portfolio_from_polars(df)
+        df = portfolio.to_dataframe(backend="polars")
+        result = Portfolio.from_dataframe(df)
         assert isinstance(result[0].loan, Loan)
         assert not isinstance(result[0].loan, RepLine)
         assert isinstance(result[1].loan, RepLine)
@@ -734,9 +708,9 @@ class TestEdgeCases:
             amortization_type=AmortizationType.LEVEL_PRINCIPAL,
             origination_date=date(2024, 1, 1),
         )
-        df = loans_to_pandas([loan])
-        result = loans_from_pandas(df)
-        assert result[0].annual_rate.rate == 0.0
+        d = loan.to_dict()
+        result = Loan.from_dict(d)
+        assert result.annual_rate.rate == 0.0
 
     def test_non_default_compounding_round_trip(self) -> None:
         """Non-default compounding convention preserved."""
@@ -751,15 +725,19 @@ class TestEdgeCases:
             amortization_type=AmortizationType.LEVEL_PAYMENT,
             origination_date=date(2024, 1, 1),
         )
-        # Pandas
-        df_pd = loans_to_pandas([loan])
-        result_pd = loans_from_pandas(df_pd)
-        assert result_pd[0].annual_rate.compounding == CompoundingConvention.SEMI_ANNUAL
+        # Dict round-trip
+        result = Loan.from_dict(loan.to_dict())
+        assert result.annual_rate.compounding == CompoundingConvention.SEMI_ANNUAL
 
-        # Polars
-        df_pl = loans_to_polars([loan])
-        result_pl = loans_from_polars(df_pl)
-        assert result_pl[0].annual_rate.compounding == CompoundingConvention.SEMI_ANNUAL
+        # Pandas round-trip
+        df_pd = pd.DataFrame([loan.to_dict()])
+        result_pd = Loan.from_dict(df_pd.to_dict(orient="records")[0])
+        assert result_pd.annual_rate.compounding == CompoundingConvention.SEMI_ANNUAL
+
+        # Polars round-trip
+        df_pl = pl.DataFrame([loan.to_dict()])
+        result_pl = Loan.from_dict(df_pl.to_dicts()[0])
+        assert result_pl.annual_rate.compounding == CompoundingConvention.SEMI_ANNUAL
 
     def test_non_default_day_count_round_trip(self) -> None:
         """Non-default day count convention preserved."""
@@ -774,11 +752,8 @@ class TestEdgeCases:
             amortization_type=AmortizationType.LEVEL_PAYMENT,
             origination_date=date(2024, 1, 1),
         )
-        df = loans_to_pandas([loan])
-        result = loans_from_pandas(df)
-        assert (
-            result[0].annual_rate.day_count.convention == DayCountConvention.THIRTY_360
-        )
+        result = Loan.from_dict(loan.to_dict())
+        assert result.annual_rate.day_count.convention == DayCountConvention.THIRTY_360
 
     def test_interest_only_loan_round_trip(self) -> None:
         """Interest-only loans round-trip correctly."""
@@ -790,9 +765,8 @@ class TestEdgeCases:
             amortization_type=AmortizationType.INTEREST_ONLY,
             origination_date=date(2024, 1, 1),
         )
-        df = loans_to_polars([loan])
-        result = loans_from_polars(df)
-        assert result[0].amortization_type == AmortizationType.INTEREST_ONLY
+        result = Loan.from_dict(loan.to_dict())
+        assert result.amortization_type == AmortizationType.INTEREST_ONLY
 
     def test_bullet_loan_round_trip(self) -> None:
         """Bullet loans round-trip correctly."""
@@ -804,10 +778,9 @@ class TestEdgeCases:
             amortization_type=AmortizationType.BULLET,
             origination_date=date(2024, 1, 1),
         )
-        df = loans_to_pandas([loan])
-        result = loans_from_pandas(df)
-        assert result[0].amortization_type == AmortizationType.BULLET
-        assert result[0].payment_frequency == PaymentFrequency.ZERO_COUPON
+        result = Loan.from_dict(loan.to_dict())
+        assert result.amortization_type == AmortizationType.BULLET
+        assert result.payment_frequency == PaymentFrequency.ZERO_COUPON
 
     def test_repline_from_loans_round_trip(self) -> None:
         """RepLine created via from_loans() round-trips correctly."""
@@ -830,8 +803,8 @@ class TestEdgeCases:
             ),
         ]
         rep = RepLine.from_loans(loans)
-        df = replines_to_pandas([rep])
-        result = replines_from_pandas(df)
+        df = pd.DataFrame([rep.to_dict()])
+        result = [RepLine.from_dict(r) for r in df.to_dict(orient="records")]
         assert len(result) == 1
         imported = result[0]
         assert imported.loan_count == 2
@@ -853,13 +826,13 @@ class TestEdgeCases:
         portfolio = Portfolio.from_loans(loans, name="Big Portfolio")
 
         # Pandas round-trip
-        df_pd = portfolio_to_pandas(portfolio)
-        result_pd = portfolio_from_pandas(df_pd, name="Big Portfolio")
+        df_pd = portfolio.to_dataframe(backend="pandas")
+        result_pd = Portfolio.from_dataframe(df_pd, name="Big Portfolio")
         assert len(result_pd) == 20
 
         # Polars round-trip
-        df_pl = portfolio_to_polars(portfolio)
-        result_pl = portfolio_from_polars(df_pl, name="Big Portfolio")
+        df_pl = portfolio.to_dataframe(backend="polars")
+        result_pl = Portfolio.from_dataframe(df_pl, name="Big Portfolio")
         assert len(result_pl) == 20
 
     def test_period_year_term_round_trip(self) -> None:
@@ -872,44 +845,42 @@ class TestEdgeCases:
             amortization_type=AmortizationType.LEVEL_PAYMENT,
             origination_date=date(2024, 1, 1),
         )
-        df = loans_to_pandas([loan])
-        assert df.iloc[0]["term"] == "30Y"
-        result = loans_from_pandas(df)
-        assert result[0].term == Period(30, TimeUnit.YEARS)
+        d = loan.to_dict()
+        assert d["term"] == "30Y"
+        result = Loan.from_dict(d)
+        assert result.term == Period(30, TimeUnit.YEARS)
 
 
 class TestColumnValidation:
-    """Test column validation helpers."""
+    """Test validation via from_dict error handling."""
 
-    def test_loans_require_six_columns(self) -> None:
-        """loan import requires exactly the right columns."""
-        df = pd.DataFrame(
-            [
-                {
-                    "principal": 100000.0,
-                    "annual_rate": 0.05,
-                    "term": "360M",
-                    # Missing payment_frequency, amortization_type, origination_date
-                }
-            ]
-        )
-        with pytest.raises(ValueError, match="Missing required columns"):
-            loans_from_pandas(df)
+    def test_loans_missing_required_fields(self) -> None:
+        """Loan.from_dict raises listing all missing fields."""
+        d = {
+            "principal": 100000.0,
+            "annual_rate": 0.05,
+            "term": "360M",
+            # Missing payment_frequency, amortization_type, origination_date
+        }
+        with pytest.raises(ValueError, match="Missing required fields for Loan"):
+            Loan.from_dict(d)
 
-    def test_replines_require_extra_columns(self) -> None:
-        """repline import requires total_balance and loan_count."""
-        df = pd.DataFrame(
-            [
-                {
-                    "principal": 100000.0,
-                    "annual_rate": 0.05,
-                    "term": "360M",
-                    "payment_frequency": "MONTHLY",
-                    "amortization_type": "LEVEL_PAYMENT",
-                    "origination_date": date(2024, 1, 1),
-                    # Missing total_balance and loan_count
-                }
-            ]
-        )
-        with pytest.raises(ValueError, match="Missing required columns"):
-            replines_from_pandas(df)
+    def test_replines_missing_required_fields(self) -> None:
+        """RepLine.from_dict raises listing all missing fields."""
+        d = {
+            "principal": 100000.0,
+            "annual_rate": 0.05,
+            "term": "360M",
+            "payment_frequency": "MONTHLY",
+            "amortization_type": "LEVEL_PAYMENT",
+            "origination_date": date(2024, 1, 1),
+            # Missing total_balance and loan_count
+        }
+        with pytest.raises(ValueError, match="Missing required fields for RepLine"):
+            RepLine.from_dict(d)
+
+    def test_portfolio_from_dataframe_missing_columns(self) -> None:
+        """Portfolio.from_dataframe raises listing all missing columns."""
+        df = pd.DataFrame([{"principal": 100000.0, "annual_rate": 0.05}])
+        with pytest.raises(ValueError, match="Missing required columns for portfolio"):
+            Portfolio.from_dataframe(df)

@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
-from typing import TYPE_CHECKING, Callable, Iterator, Optional
+from typing import TYPE_CHECKING, Any, Callable, Iterator, Optional
 
 from ..behavior import DefaultCurve, PrepaymentCurve
 from ..cashflow import CashFlow, CashFlowSchedule
 from ..cashflow.discount import DiscountCurve
 from ..instruments import Loan
+from ..instruments.loan import _is_na
 from ..money import Money
 from .repline import RepLine
 
@@ -679,6 +680,127 @@ class Portfolio:
         schedule = self.aggregate_schedule(prepayment_curve, default_curve)
         return schedule.convexity(discount_curve)
 
+    # -----------------------------------------------------------------------
+    # DataFrame import/export
+    # -----------------------------------------------------------------------
+
+    def to_dataframe(self, backend: str = "pandas") -> Any:
+        """Export this Portfolio to a pandas or polars DataFrame.
+
+        Each position becomes one row. RepLine positions include additional
+        columns (total_balance, loan_count, stratification fields).
+
+        Args:
+            backend: ``"pandas"`` (default) or ``"polars"``.
+
+        Returns:
+            DataFrame with one row per position.
+
+        Raises:
+            ImportError: If the requested backend is not installed.
+        """
+        from .._dataframe import _dicts_to_df
+
+        rows: list[dict[str, Any]] = []
+        for pos in self.positions:
+            if isinstance(pos.loan, RepLine):
+                row = pos.loan.to_dict()
+            else:
+                row = pos.loan.to_dict()
+            row["position_id"] = pos.position_id
+            row["factor"] = pos.factor
+            rows.append(row)
+        return _dicts_to_df(rows, backend)
+
+    @classmethod
+    def from_dataframe(
+        cls,
+        df: Any,
+        *,
+        name: str = "",
+        default_currency: str = "USD",
+        default_compounding: str = "MONTHLY",
+        default_day_count: str = "ACT/365",
+    ) -> Self:
+        """Import a Portfolio from a pandas or polars DataFrame.
+
+        Auto-detects RepLine rows by checking for non-null values in the
+        ``total_balance`` and ``loan_count`` columns.
+
+        Missing optional columns use sensible defaults:
+        - currency -> "USD"
+        - compounding -> "MONTHLY"
+        - day_count -> "ACT/365"
+        - first_payment_date -> None
+        - factor -> 1.0
+        - position_id -> auto-generated "POS-0001", etc.
+
+        Args:
+            df: pandas or polars DataFrame with portfolio data.
+            name: Portfolio name.
+            default_currency: Default ISO currency code.
+            default_compounding: Default compounding convention name.
+            default_day_count: Default day count convention value.
+
+        Returns:
+            Portfolio object.
+
+        Raises:
+            ValueError: If required columns are missing or data is invalid.
+
+        Note:
+            BusinessDayCalendar is not preserved in round-trip. Imported loans
+            will have calendar=None.
+        """
+        from .._dataframe import _df_to_dicts
+
+        # Validate required columns upfront against the DataFrame schema
+        columns = set(df.columns)
+        missing = Loan.REQUIRED_DICT_FIELDS - columns
+        if missing:
+            raise ValueError(
+                f"Missing required columns for portfolio import: {sorted(missing)}"
+            )
+
+        dicts = _df_to_dicts(df)
+        defaults = dict(
+            default_currency=default_currency,
+            default_compounding=default_compounding,
+            default_day_count=default_day_count,
+        )
+
+        positions: list[PortfolioPosition] = []
+        for i, row_dict in enumerate(dicts):
+            instrument: Loan | RepLine
+            if _is_repline_row(row_dict):
+                instrument = RepLine.from_dict(row_dict, **defaults)
+            else:
+                instrument = Loan.from_dict(row_dict, **defaults)
+
+            # Position ID
+            pid = row_dict.get("position_id")
+            if pid is None or _is_na(pid):
+                position_id = f"POS-{i + 1:04d}"
+            else:
+                position_id = str(pid)
+
+            # Factor
+            fval = row_dict.get("factor")
+            if fval is None or _is_na(fval):
+                factor = 1.0
+            else:
+                factor = float(fval)
+
+            positions.append(
+                PortfolioPosition(
+                    loan=instrument,
+                    position_id=position_id,
+                    factor=factor,
+                )
+            )
+
+        return cls.from_list(positions, name=name)
+
     # Filtering methods
 
     def filter(self, predicate: Callable[[PortfolioPosition], bool]) -> Self:
@@ -725,3 +847,15 @@ class Portfolio:
 
     def __repr__(self) -> str:
         return f"Portfolio({self.loan_count} positions, name={self.name!r})"
+
+
+# ---------------------------------------------------------------------------
+# Module-level private helpers
+# ---------------------------------------------------------------------------
+
+
+def _is_repline_row(row: dict[str, Any]) -> bool:
+    """Check if a row dict represents a RepLine (has non-null repline fields)."""
+    tb = row.get("total_balance")
+    lc = row.get("loan_count")
+    return tb is not None and not _is_na(tb) and lc is not None and not _is_na(lc)

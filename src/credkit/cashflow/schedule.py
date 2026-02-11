@@ -3,7 +3,7 @@
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Iterator, Self
+from typing import Any, Iterator, Self
 
 import pyxirr
 
@@ -698,6 +698,34 @@ class CashFlowSchedule:
 
         denominator = total_pv * (1.0 + y / k) ** 2
         return weighted_sum / denominator
+
+    # DataFrame export
+
+    def to_dataframe(self, backend: str = "pandas") -> Any:
+        """Export this schedule to a pandas or polars DataFrame.
+
+        Args:
+            backend: ``"pandas"`` (default) or ``"polars"``.
+
+        Returns:
+            DataFrame with columns: date, amount, currency, type, description.
+
+        Raises:
+            ImportError: If the requested backend is not installed.
+        """
+        from .._dataframe import _dicts_to_df
+
+        rows = [
+            {
+                "date": cf.date,
+                "amount": cf.amount.amount,
+                "currency": cf.amount.currency.iso_code,
+                "type": cf.type.name,
+                "description": cf.description,
+            }
+            for cf in self.cash_flows
+        ]
+        return _dicts_to_df(rows, backend)
 
     # String representation
 

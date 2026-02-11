@@ -3,16 +3,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
-from typing import TYPE_CHECKING
+from datetime import date, datetime
+from typing import TYPE_CHECKING, Any
 
 from ..behavior import PrepaymentCurve, DefaultCurve, LossGivenDefault
 from ..cashflow import CashFlowSchedule
 from ..cashflow.discount import DiscountCurve
 from ..money import InterestRate, Money
+from ..money.currency import Currency
+from ..money.rate import CompoundingConvention as _CompoundingConvention
 from ..temporal import (
     BusinessDayCalendar,
     BusinessDayConvention,
+    DayCountBasis,
+    DayCountConvention,
     PaymentFrequency,
     Period,
 )
@@ -284,6 +288,139 @@ class Loan:
             amortization_type=AmortizationType.LEVEL_PAYMENT,
             origination_date=origination_date or date_class.today(),
         )
+
+    # -----------------------------------------------------------------------
+    # Dict serialization
+    # -----------------------------------------------------------------------
+
+    #: Fields that must be present in a dict passed to ``from_dict()``.
+    #: Optional fields (currency, compounding, day_count, first_payment_date)
+    #: fall back to defaults when missing or null.
+    REQUIRED_DICT_FIELDS: frozenset[str] = frozenset({
+        "principal",
+        "annual_rate",
+        "term",
+        "payment_frequency",
+        "amortization_type",
+        "origination_date",
+    })
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert this Loan to a flat dict suitable for a DataFrame row.
+
+        Returns:
+            Dict with keys: principal, currency, annual_rate, compounding,
+            day_count, term, payment_frequency, amortization_type,
+            origination_date, first_payment_date.
+
+        Note:
+            BusinessDayCalendar is not included because calendar objects
+            contain holiday sets that are not representable in flat tabular
+            format.
+        """
+        return {
+            "principal": self.principal.amount,
+            "currency": self.principal.currency.iso_code,
+            "annual_rate": self.annual_rate.rate,
+            "compounding": self.annual_rate.compounding.name,
+            "day_count": self.annual_rate.day_count.convention.value,
+            "term": str(self.term),
+            "payment_frequency": self.payment_frequency.name,
+            "amortization_type": self.amortization_type.name,
+            "origination_date": self.origination_date,
+            "first_payment_date": self.first_payment_date,
+        }
+
+    @classmethod
+    def from_dict(
+        cls,
+        row: dict[str, Any],
+        *,
+        default_currency: str = "USD",
+        default_compounding: str = "MONTHLY",
+        default_day_count: str = "ACT/365",
+    ) -> Self:
+        """Reconstruct a Loan from a flat dict (e.g. a DataFrame row).
+
+        Handles date parsing (date, datetime, string), NA detection, and
+        optional column defaults for currency, compounding, and day_count.
+
+        Args:
+            row: Dict with loan field keys.
+            default_currency: ISO currency code when column is missing/null.
+            default_compounding: CompoundingConvention name when missing/null.
+            default_day_count: DayCountConvention value when missing/null.
+
+        Returns:
+            Reconstructed Loan object.
+
+        Raises:
+            ValueError: If required fields are missing or invalid.
+
+        Note:
+            BusinessDayCalendar is not preserved in round-trip. Imported
+            loans will have calendar=None.
+        """
+        missing = cls.REQUIRED_DICT_FIELDS - row.keys()
+        if missing:
+            raise ValueError(
+                f"Missing required fields for Loan: {sorted(missing)}"
+            )
+
+        try:
+            # Currency
+            currency_code = row.get("currency", default_currency)
+            if currency_code is None or _is_na(currency_code):
+                currency_code = default_currency
+            currency = Currency.from_code(str(currency_code))
+
+            # Principal
+            principal = Money(float(row["principal"]), currency)
+
+            # Compounding
+            comp_name = row.get("compounding", default_compounding)
+            if comp_name is None or _is_na(comp_name):
+                comp_name = default_compounding
+            compounding = _CompoundingConvention[str(comp_name)]
+
+            # Day count
+            dc_value = row.get("day_count", default_day_count)
+            if dc_value is None or _is_na(dc_value):
+                dc_value = default_day_count
+            day_count = DayCountBasis(DayCountConvention(str(dc_value)))
+
+            # Interest rate
+            annual_rate = InterestRate(
+                rate=float(row["annual_rate"]),
+                compounding=compounding,
+                day_count=day_count,
+            )
+
+            # Term
+            term = Period.from_string(str(row["term"]))
+
+            # Enums
+            payment_frequency = PaymentFrequency[str(row["payment_frequency"])]
+            amortization_type = AmortizationType[str(row["amortization_type"])]
+
+            # Dates
+            origination_date = _parse_date(row["origination_date"])
+            if origination_date is None:
+                raise ValueError("origination_date must not be null")
+
+            first_payment_date = _parse_date(row.get("first_payment_date"))
+
+            return cls(
+                principal=principal,
+                annual_rate=annual_rate,
+                term=term,
+                payment_frequency=payment_frequency,
+                amortization_type=amortization_type,
+                origination_date=origination_date,
+                first_payment_date=first_payment_date,
+            )
+        except (KeyError, ValueError, TypeError) as exc:
+            raise ValueError(f"Error converting row to Loan: {exc}") from exc
 
     def calculate_periodic_rate(self) -> float:
         """
@@ -802,3 +939,51 @@ class Loan:
             f"Loan(principal={self.principal}, annual_rate={self.annual_rate}, "
             f"term={self.term}, amortization_type={self.amortization_type})"
         )
+
+
+# ---------------------------------------------------------------------------
+# Module-level private helpers for from_dict
+# ---------------------------------------------------------------------------
+
+
+def _parse_date(value: Any) -> date | None:
+    """Convert a value to a date, or None if null/missing."""
+    if value is None:
+        return None
+
+    # Handle pandas/numpy NA-like sentinels
+    try:
+        import pandas as pd  # type: ignore[import-untyped]
+
+        if pd.isna(value):
+            return None
+    except (ImportError, TypeError, ValueError):
+        pass
+
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, str):
+        return date.fromisoformat(value)
+
+    # pandas Timestamp
+    if hasattr(value, "date") and callable(value.date):
+        return value.date()
+
+    raise TypeError(f"Cannot convert {type(value).__name__} to date: {value!r}")
+
+
+def _is_na(value: Any) -> bool:
+    """Check if a value is NA/NaN/None without requiring pandas."""
+    if value is None:
+        return True
+    try:
+        import pandas as pd  # type: ignore[import-untyped]
+
+        return bool(pd.isna(value))
+    except (ImportError, TypeError, ValueError):
+        pass
+    if isinstance(value, float):
+        return value != value  # NaN != NaN
+    return False

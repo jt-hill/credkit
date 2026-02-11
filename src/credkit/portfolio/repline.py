@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ..behavior import DefaultCurve, PrepaymentCurve
 from ..cashflow import CashFlow, CashFlowSchedule
 from ..cashflow.discount import DiscountCurve
 from ..instruments import Loan
+from ..instruments.loan import _is_na
 from ..money import InterestRate, Money
 from ..temporal import Period
 
@@ -340,6 +341,126 @@ class RepLine:
         """
         return self.loan.yield_to_maturity(price, prepayment_curve, default_curve)
 
+    # -----------------------------------------------------------------------
+    # Dict serialization
+    # -----------------------------------------------------------------------
+
+    #: Fields required beyond Loan.REQUIRED_DICT_FIELDS for ``from_dict()``.
+    #: Stratification fields are always optional.
+    REQUIRED_DICT_FIELDS: frozenset[str] = Loan.REQUIRED_DICT_FIELDS | frozenset({
+        "total_balance",
+        "loan_count",
+    })
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert this RepLine to a flat dict suitable for a DataFrame row.
+
+        Returns:
+            Dict with all loan fields plus total_balance, loan_count,
+            and stratification fields.
+        """
+        row = self.loan.to_dict()
+        row["total_balance"] = self.total_balance.amount
+        row["loan_count"] = self.loan_count
+
+        strat = self.stratification
+        if strat is not None:
+            row["rate_bucket_min"] = strat.rate_bucket[0] if strat.rate_bucket else None
+            row["rate_bucket_max"] = strat.rate_bucket[1] if strat.rate_bucket else None
+            row["term_bucket_min"] = strat.term_bucket[0] if strat.term_bucket else None
+            row["term_bucket_max"] = strat.term_bucket[1] if strat.term_bucket else None
+            row["vintage"] = strat.vintage
+            row["product_type"] = strat.product_type
+        else:
+            row["rate_bucket_min"] = None
+            row["rate_bucket_max"] = None
+            row["term_bucket_min"] = None
+            row["term_bucket_max"] = None
+            row["vintage"] = None
+            row["product_type"] = None
+
+        return row
+
+    @classmethod
+    def from_dict(
+        cls,
+        row: dict[str, Any],
+        *,
+        default_currency: str = "USD",
+        default_compounding: str = "MONTHLY",
+        default_day_count: str = "ACT/365",
+    ) -> Self:
+        """Reconstruct a RepLine from a flat dict (e.g. a DataFrame row).
+
+        Args:
+            row: Dict with loan + repline field keys.
+            default_currency: ISO currency code when column is missing/null.
+            default_compounding: CompoundingConvention name when missing/null.
+            default_day_count: DayCountConvention value when missing/null.
+
+        Returns:
+            Reconstructed RepLine object.
+
+        Raises:
+            ValueError: If required fields are missing or invalid.
+        """
+        missing = cls.REQUIRED_DICT_FIELDS - row.keys()
+        if missing:
+            raise ValueError(
+                f"Missing required fields for RepLine: {sorted(missing)}"
+            )
+
+        try:
+            loan = Loan.from_dict(
+                row,
+                default_currency=default_currency,
+                default_compounding=default_compounding,
+                default_day_count=default_day_count,
+            )
+
+            currency = loan.principal.currency
+            total_balance = Money(float(row["total_balance"]), currency)
+            loan_count = int(row["loan_count"])
+
+            # Stratification criteria (all optional)
+            rate_min = _get_optional_float(row, "rate_bucket_min")
+            rate_max = _get_optional_float(row, "rate_bucket_max")
+            term_min = _get_optional_int(row, "term_bucket_min")
+            term_max = _get_optional_int(row, "term_bucket_max")
+            vintage = _get_optional_str(row, "vintage")
+            product_type = _get_optional_str(row, "product_type")
+
+            rate_bucket = (
+                (rate_min, rate_max)
+                if rate_min is not None and rate_max is not None
+                else None
+            )
+            term_bucket = (
+                (term_min, term_max)
+                if term_min is not None and term_max is not None
+                else None
+            )
+
+            strat: StratificationCriteria | None = None
+            if any(
+                v is not None for v in (rate_bucket, term_bucket, vintage, product_type)
+            ):
+                strat = StratificationCriteria(
+                    rate_bucket=rate_bucket,
+                    term_bucket=term_bucket,
+                    vintage=vintage,
+                    product_type=product_type,
+                )
+
+            return cls(
+                loan=loan,
+                total_balance=total_balance,
+                loan_count=loan_count,
+                stratification=strat,
+            )
+        except (KeyError, ValueError, TypeError) as exc:
+            raise ValueError(f"Error converting row to RepLine: {exc}") from exc
+
     # Factory method
 
     @classmethod
@@ -453,3 +574,29 @@ class RepLine:
             f"RepLine(loan={self.loan!r}, total_balance={self.total_balance!r}, "
             f"loan_count={self.loan_count})"
         )
+
+
+# ---------------------------------------------------------------------------
+# Module-level private helpers for from_dict
+# ---------------------------------------------------------------------------
+
+
+def _get_optional_float(row: dict[str, Any], key: str) -> float | None:
+    val = row.get(key)
+    if val is None or _is_na(val):
+        return None
+    return float(val)
+
+
+def _get_optional_int(row: dict[str, Any], key: str) -> int | None:
+    val = row.get(key)
+    if val is None or _is_na(val):
+        return None
+    return int(val)
+
+
+def _get_optional_str(row: dict[str, Any], key: str) -> str | None:
+    val = row.get(key)
+    if val is None or _is_na(val):
+        return None
+    return str(val)
