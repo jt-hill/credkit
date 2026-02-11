@@ -176,7 +176,9 @@ print(f"\nAfter 10 years:")
 print(f"  30-year mortgage equity: {equity_30_10yr}")
 print(f"  50-year mortgage equity: {equity_50_10yr}")
 print(f"  Equity gap: {equity_30_10yr - equity_50_10yr}")
-print(f"\n  The 30-year has built {equity_30_10yr.ratio(equity_50_10yr):.1f}x more equity")
+print(
+    f"\n  The 30-year has built {equity_30_10yr.ratio(equity_50_10yr):.1f}x more equity"
+)
 
 # %% [markdown]
 """
@@ -211,8 +213,12 @@ for month in range(1, 601):
         break
 
 print("Time to reach 20% equity (enough to refinance without PMI):")
-print(f"  30-year mortgage: {months_to_20pct_30} months ({months_to_20pct_30 / 12:.1f} years)")
-print(f"  50-year mortgage: {months_to_20pct_50} months ({months_to_20pct_50 / 12:.1f} years)")
+print(
+    f"  30-year mortgage: {months_to_20pct_30} months ({months_to_20pct_30 / 12:.1f} years)"
+)
+print(
+    f"  50-year mortgage: {months_to_20pct_50} months ({months_to_20pct_50 / 12:.1f} years)"
+)
 
 # %% Time to reach 10% equity
 target_10pct = principal.amount * 0.90
@@ -237,8 +243,12 @@ for month in range(1, 601):
         break
 
 print(f"\nTime to reach 10% equity (minimum to sell without bringing cash):")
-print(f"  30-year mortgage: {months_to_10pct_30} months ({months_to_10pct_30 / 12:.1f} years)")
-print(f"  50-year mortgage: {months_to_10pct_50} months ({months_to_10pct_50 / 12:.1f} years)")
+print(
+    f"  30-year mortgage: {months_to_10pct_30} months ({months_to_10pct_30 / 12:.1f} years)"
+)
+print(
+    f"  50-year mortgage: {months_to_10pct_50} months ({months_to_10pct_50 / 12:.1f} years)"
+)
 
 print("\nWhat this means:")
 print("  - Housing downturn in year 5? The 50-year borrower is likely underwater")
@@ -331,21 +341,27 @@ print(f"Assumption: 7% annual return (historical stock market average)")
 # %% Investment value over time
 print("\nInvestment value vs remaining mortgage balance:")
 print("-" * 70)
-print(f"{'Year':<8} {'Investment Value':<20} {'50-Yr Balance':<20} {'Net Position':<20}")
+print(
+    f"{'Year':<8} {'Investment Value':<20} {'50-Yr Balance':<20} {'Net Position':<20}"
+)
 print("-" * 70)
 
 investment_value = 0.0
 for year in [5, 10, 15, 20, 25, 30]:
     # Compound the investment
     for _ in range(year * 12 if year == 5 else 60):
-        investment_value = investment_value * (1 + monthly_return) + monthly_savings.amount
+        investment_value = (
+            investment_value * (1 + monthly_return) + monthly_savings.amount
+        )
 
     as_of = Period.from_string(f"{year}Y").add_to_date(origination)
     balance_50 = schedule_50.balance_at(as_of)
     net_position = investment_value - balance_50.amount
 
     inv_str = f"${investment_value:,.0f}"
-    net_str = f"${net_position:,.0f}" if net_position >= 0 else f"-${-net_position:,.0f}"
+    net_str = (
+        f"${net_position:,.0f}" if net_position >= 0 else f"-${-net_position:,.0f}"
+    )
 
     print(f"{year:<8} {inv_str:<20} {str(balance_50):<20} {net_str:<20}")
 

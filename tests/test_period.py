@@ -25,7 +25,6 @@ class TestPeriod:
         assert Period.from_string("90D") == Period(90, TimeUnit.DAYS)
         assert Period.from_string("2W") == Period(2, TimeUnit.WEEKS)
 
-
     def test_add_to_date_days(self):
         """Test adding days to a date."""
         start = date(2024, 1, 15)
@@ -89,4 +88,3 @@ class TestPeriod:
         assert p1 > p2
         assert p2 < p1
         assert p1 >= p3  # Approximately equal
-

@@ -45,7 +45,9 @@ class DiscountCurve(ABC):
     valuation_date: date
 
     @abstractmethod
-    def discount_factor(self, target_date: date, valuation_date: date | None = None) -> float:
+    def discount_factor(
+        self, target_date: date, valuation_date: date | None = None
+    ) -> float:
         """
         Calculate discount factor from valuation date to target date.
 
@@ -88,7 +90,9 @@ class FlatDiscountCurve(DiscountCurve):
         if not isinstance(self.rate, InterestRate):
             raise TypeError(f"rate must be InterestRate, got {type(self.rate)}")
         if not isinstance(self.valuation_date, date):
-            raise TypeError(f"valuation_date must be date, got {type(self.valuation_date)}")
+            raise TypeError(
+                f"valuation_date must be date, got {type(self.valuation_date)}"
+            )
 
     @classmethod
     def from_rate(
@@ -120,7 +124,9 @@ class FlatDiscountCurve(DiscountCurve):
         )
         return cls(rate=rate, valuation_date=valuation_date, day_count=day_count)
 
-    def discount_factor(self, target_date: date, valuation_date: date | None = None) -> float:
+    def discount_factor(
+        self, target_date: date, valuation_date: date | None = None
+    ) -> float:
         """
         Calculate discount factor using the flat rate.
 
@@ -201,7 +207,9 @@ class ZeroCurve(DiscountCurve):
     def __post_init__(self) -> None:
         """Validate zero curve parameters."""
         if not isinstance(self.valuation_date, date):
-            raise TypeError(f"valuation_date must be date, got {type(self.valuation_date)}")
+            raise TypeError(
+                f"valuation_date must be date, got {type(self.valuation_date)}"
+            )
 
         if len(self.points) < 1:
             raise ValueError("Zero curve must have at least one point")
@@ -218,10 +226,7 @@ class ZeroCurve(DiscountCurve):
             # Auto-convert int to float
             if isinstance(rate, int):
                 object.__setattr__(
-                    self, "points", tuple(
-                        (p[0], float(p[1]))
-                        for p in self.points
-                    )
+                    self, "points", tuple((p[0], float(p[1])) for p in self.points)
                 )
                 break
 
@@ -237,6 +242,7 @@ class ZeroCurve(DiscountCurve):
         # Set default compounding if not provided
         if self.compounding is None:
             from ..money.rate import CompoundingConvention
+
             object.__setattr__(self, "compounding", CompoundingConvention.MONTHLY)
 
     @classmethod
@@ -272,8 +278,7 @@ class ZeroCurve(DiscountCurve):
         """
         # Convert to float and sort
         float_rates = sorted(
-            [(dt, float(rate)) for dt, rate in rates],
-            key=lambda x: x[0]
+            [(dt, float(rate)) for dt, rate in rates], key=lambda x: x[0]
         )
         return cls(
             valuation_date=valuation_date,
@@ -283,7 +288,9 @@ class ZeroCurve(DiscountCurve):
             interpolation=interpolation,
         )
 
-    def discount_factor(self, target_date: date, valuation_date: date | None = None) -> float:
+    def discount_factor(
+        self, target_date: date, valuation_date: date | None = None
+    ) -> float:
         """
         Calculate discount factor using interpolated zero rate.
 
@@ -312,7 +319,10 @@ class ZeroCurve(DiscountCurve):
 
         # Create InterestRate and use its discount factor calculation
         from ..money.rate import InterestRate
-        rate = InterestRate(rate=zero_rate, compounding=self.compounding, day_count=self.day_count)
+
+        rate = InterestRate(
+            rate=zero_rate, compounding=self.compounding, day_count=self.day_count
+        )
         return rate.discount_factor(year_fraction)
 
     def spot_rate(self, target_date: date) -> InterestRate:
@@ -335,7 +345,9 @@ class ZeroCurve(DiscountCurve):
             raise ValueError("Target date must be after valuation date")
 
         zero_rate = self._interpolate_rate(target_date, self.valuation_date)
-        return InterestRate(rate=zero_rate, compounding=self.compounding, day_count=self.day_count)
+        return InterestRate(
+            rate=zero_rate, compounding=self.compounding, day_count=self.day_count
+        )
 
     def forward_rate(self, start_date: date, end_date: date) -> InterestRate:
         """
@@ -375,7 +387,9 @@ class ZeroCurve(DiscountCurve):
         forward_factor = ratio ** (1.0 / year_fraction)
         forward_rate = forward_factor - 1.0
 
-        return InterestRate(rate=forward_rate, compounding=self.compounding, day_count=self.day_count)
+        return InterestRate(
+            rate=forward_rate, compounding=self.compounding, day_count=self.day_count
+        )
 
     def _interpolate_rate(self, target_date: date, val_date: date) -> float:
         """
@@ -422,14 +436,23 @@ class ZeroCurve(DiscountCurve):
                     t2 = self.day_count.year_fraction(val_date, date2)
                     t_target = self.day_count.year_fraction(val_date, target_date)
 
-                    r1_obj = InterestRate(rate=rate1, compounding=self.compounding, day_count=self.day_count)
-                    r2_obj = InterestRate(rate=rate2, compounding=self.compounding, day_count=self.day_count)
+                    r1_obj = InterestRate(
+                        rate=rate1,
+                        compounding=self.compounding,
+                        day_count=self.day_count,
+                    )
+                    r2_obj = InterestRate(
+                        rate=rate2,
+                        compounding=self.compounding,
+                        day_count=self.day_count,
+                    )
 
                     df1 = r1_obj.discount_factor(t1)
                     df2 = r2_obj.discount_factor(t2)
 
                     # Linear interpolation on log(df)
                     import math
+
                     log_df1 = math.log(df1)
                     log_df2 = math.log(df2)
 
@@ -440,6 +463,7 @@ class ZeroCurve(DiscountCurve):
                     # Solve for rate from discount factor
                     # df = (1 + r/n)^(-n*t) => r = n * (df^(-1/n/t) - 1)
                     from ..money.rate import CompoundingConvention
+
                     if self.compounding == CompoundingConvention.CONTINUOUS:
                         # df = e^(-r*t) => r = -ln(df) / t
                         return -log_df_target / t_target

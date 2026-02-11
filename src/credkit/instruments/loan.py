@@ -617,7 +617,10 @@ class Loan:
             >>> cdr = DefaultCurve.constant_cdr(0.02)
             >>> expected = loan.expected_cashflows(prepayment_curve=cpr, default_curve=cdr)
         """
-        from ..behavior.adjustments import apply_default_curve_simple, apply_prepayment_curve
+        from ..behavior.adjustments import (
+            apply_default_curve_simple,
+            apply_prepayment_curve,
+        )
 
         # Start with base or prepayment-adjusted schedule
         if prepayment_curve is None:

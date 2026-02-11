@@ -70,7 +70,6 @@ class TestPrepaymentRate:
         # Should be very close after roundtrip
         assert abs(original.annual_rate - reconstructed.annual_rate) < 0.0001
 
-
     def test_multiplication(self):
         """Test scaling prepayment rate."""
         cpr = PrepaymentRate.from_percent(10.0)
@@ -88,7 +87,6 @@ class TestPrepaymentRate:
         assert cpr2 > cpr1
         assert cpr1 == cpr3
         assert cpr1 <= cpr3
-
 
 
 class TestPrepaymentCurve:
@@ -116,7 +114,6 @@ class TestPrepaymentCurve:
 
         month60_rate = psa.rate_at_month(60)
         assert abs(month60_rate.to_percent() - 6.0) < 0.01
-
 
     def test_psa_model_ramp(self):
         """Test PSA model ramps correctly."""
@@ -169,7 +166,6 @@ class TestPrepaymentCurve:
         # Month 12 should be 10%
         assert curve.rate_at_month(12).to_percent() == 10
 
-
     def test_scale(self):
         """Test scaling curve."""
         psa_100 = PrepaymentCurve.psa_model(100)
@@ -180,7 +176,6 @@ class TestPrepaymentCurve:
         rate_50 = psa_50.rate_at_month(30)
 
         assert abs(rate_50.annual_rate * 2 - rate_100.annual_rate) < 0.0001
-
 
 
 class TestDefaultRate:
@@ -195,7 +190,6 @@ class TestDefaultRate:
         """Test creating from percentage."""
         cdr = DefaultRate.from_percent(2.0)
         assert cdr.annual_rate == 0.02
-
 
     def test_to_mdr(self):
         """Test CDR to MDR conversion."""
@@ -212,7 +206,6 @@ class TestDefaultRate:
 
         # Should be approximately 2% CDR
         assert 0.019 < cdr.annual_rate < 0.021
-
 
 
 class TestDefaultCurve:
@@ -367,7 +360,10 @@ class TestScheduleAdjustments:
         # Total includes both scheduled and prepayment flows
         total_all_principal = adjusted.get_principal_flows().total_amount()
         # Should roughly equal original (may differ slightly due to reduced interest)
-        assert abs(total_all_principal.amount - total_principal_original.amount) < Money.from_float(5000).amount
+        assert (
+            abs(total_all_principal.amount - total_principal_original.amount)
+            < Money.from_float(5000).amount
+        )
 
     def test_apply_prepayment_curve(self, simple_loan):
         """Test applying prepayment curve with re-amortization."""
@@ -377,7 +373,9 @@ class TestScheduleAdjustments:
         first_payment_date = (
             simple_loan.first_payment_date
             if simple_loan.first_payment_date is not None
-            else simple_loan.payment_frequency.period.add_to_date(simple_loan.origination_date)
+            else simple_loan.payment_frequency.period.add_to_date(
+                simple_loan.origination_date
+            )
         )
 
         adjusted = apply_prepayment_curve(
@@ -413,15 +411,23 @@ class TestScheduleAdjustments:
 
         # Schedule should stop at default date (plus recovery flow)
         flows_after_default = [
-            cf for cf in adjusted.cash_flows
+            cf
+            for cf in adjusted.cash_flows
             if cf.date > default_date and cf.type != CashFlowType.PRINCIPAL
         ]
         # Should only be interest/fee flows if any
-        assert all(cf.type in (CashFlowType.INTEREST, CashFlowType.FEE) for cf in flows_after_default)
+        assert all(
+            cf.type in (CashFlowType.INTEREST, CashFlowType.FEE)
+            for cf in flows_after_default
+        )
 
         # Should have recovery flow at default_date + recovery_lag
         recovery_date = lgd.recovery_lag.add_to_date(default_date)
-        recovery_flows = [cf for cf in adjusted.cash_flows if cf.date == recovery_date and cf.type == CashFlowType.PRINCIPAL]
+        recovery_flows = [
+            cf
+            for cf in adjusted.cash_flows
+            if cf.date == recovery_date and cf.type == CashFlowType.PRINCIPAL
+        ]
         assert len(recovery_flows) > 0
 
     def test_apply_default_curve_simple(self, simple_loan):
@@ -527,6 +533,7 @@ class TestLoanBehavioralMethods:
         base = mortgage.generate_schedule()
         assert expected.total_amount() < base.total_amount()
 
+
 class TestIntegration:
     """Integration tests combining multiple components."""
 
@@ -582,8 +589,12 @@ class TestIntegration:
         later_prepays = [cf for cf in prepay_flows if cf.date.year == 2027]
 
         if early_prepays and later_prepays:
-            avg_early = sum(cf.amount.amount for cf in early_prepays) / len(early_prepays)
-            avg_later = sum(cf.amount.amount for cf in later_prepays) / len(later_prepays)
+            avg_early = sum(cf.amount.amount for cf in early_prepays) / len(
+                early_prepays
+            )
+            avg_later = sum(cf.amount.amount for cf in later_prepays) / len(
+                later_prepays
+            )
             # Later prepayments should generally be larger (PSA ramps up)
             # Note: This may not always hold due to declining balance, but is a rough check
             assert avg_later >= avg_early * 0.5  # At least not dramatically smaller

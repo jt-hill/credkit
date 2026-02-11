@@ -78,7 +78,11 @@ class Money:
         Returns:
             New Money instance with rounded amount
         """
-        places = decimal_places if decimal_places is not None else self.currency.decimal_places
+        places = (
+            decimal_places
+            if decimal_places is not None
+            else self.currency.decimal_places
+        )
         rounded = round(self.amount, places)
         return Money(amount=rounded, currency=self.currency)
 

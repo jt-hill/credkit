@@ -38,7 +38,9 @@ class DefaultRate:
             raise TypeError(f"annual_rate must be float, got {type(self.annual_rate)}")
 
         if self.annual_rate < 0:
-            raise ValueError(f"annual_rate must be non-negative, got {self.annual_rate}")
+            raise ValueError(
+                f"annual_rate must be non-negative, got {self.annual_rate}"
+            )
 
         if self.annual_rate > 1:
             raise ValueError(
@@ -106,7 +108,7 @@ class DefaultRate:
         survival_annual = 1.0 - self.annual_rate
 
         # (1 - CDR)^(1/12)
-        survival_monthly = survival_annual ** one_twelfth
+        survival_monthly = survival_annual**one_twelfth
 
         # MDR = 1 - survival_monthly
         mdr = 1.0 - survival_monthly
@@ -139,7 +141,7 @@ class DefaultRate:
 
         # CDR = 1 - (1 - MDR)^12
         survival_monthly = 1.0 - mdr
-        survival_annual = survival_monthly ** 12.0
+        survival_annual = survival_monthly**12.0
         cdr = 1.0 - survival_annual
 
         return cls(annual_rate=cdr)
@@ -334,7 +336,9 @@ class DefaultCurve:
             rates.append((month, DefaultRate(annual_rate=cdr)))
 
         # Steady state
-        rates.append((peak_month + decline_months + 1, DefaultRate(annual_rate=steady_cdr)))
+        rates.append(
+            (peak_month + decline_months + 1, DefaultRate(annual_rate=steady_cdr))
+        )
 
         return cls(rates_by_month=tuple(rates))
 
@@ -404,10 +408,7 @@ class DefaultCurve:
             >>> base_curve = DefaultCurve.constant_cdr(0.02)
             >>> half_curve = base_curve.scale(0.5)
         """
-        scaled_rates = [
-            (month, rate * factor)
-            for month, rate in self.rates_by_month
-        ]
+        scaled_rates = [(month, rate * factor) for month, rate in self.rates_by_month]
         return DefaultCurve(rates_by_month=tuple(scaled_rates))
 
     # String representation

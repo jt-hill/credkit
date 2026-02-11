@@ -111,4 +111,3 @@ class TestMoney:
         assert not m_pos.is_negative()
         assert m_neg.is_negative()
         assert not m_zero.is_negative()
-

@@ -714,7 +714,9 @@ class TestAnalyticsMetrics:
     def test_wal_ignores_interest_flows(self):
         """Test that WAL only considers principal flows."""
         cf1 = CashFlow(date(2026, 1, 1), Money.from_float(1000), CashFlowType.PRINCIPAL)
-        cf2 = CashFlow(date(2025, 6, 1), Money.from_float(50), CashFlowType.INTEREST)  # Earlier interest
+        cf2 = CashFlow(
+            date(2025, 6, 1), Money.from_float(50), CashFlowType.INTEREST
+        )  # Earlier interest
         schedule = CashFlowSchedule(cash_flows=(cf1, cf2))
 
         wal = schedule.weighted_average_life(valuation_date=date(2025, 1, 1))
@@ -762,7 +764,9 @@ class TestAnalyticsMetrics:
             CashFlow(date(2025 + i, 1, 1), Money.from_float(100), CashFlowType.INTEREST)
             for i in range(1, 6)
         ]
-        flows.append(CashFlow(date(2030, 1, 1), Money.from_float(1000), CashFlowType.PRINCIPAL))
+        flows.append(
+            CashFlow(date(2030, 1, 1), Money.from_float(1000), CashFlowType.PRINCIPAL)
+        )
         schedule = CashFlowSchedule(cash_flows=tuple(flows))
 
         rate = InterestRate.from_percent(5.0)

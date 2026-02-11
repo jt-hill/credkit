@@ -10,12 +10,22 @@ authors = [
 requires-python = ">=3.13"
 dependencies = ["pyxirr>=0.10"]
 
+[project.optional-dependencies]
+pandas = ["pandas>=2.0"]
+polars = ["polars>=0.20"]
+dataframe = ["pandas>=2.0", "polars>=0.20"]
+
 [build-system]
 requires = ["uv_build>=0.8.18,<0.9.0"]
 build-backend = "uv_build"
 
 [dependency-groups]
-dev = ["pytest>=8.4.2"]
+dev = [
+    "pytest>=8.4.2",
+    "pandas>=2.0",
+    "polars>=0.20",
+    "ruff>=0.15.0",
+]
 
 [tool.pyright]
 venvPath = "."

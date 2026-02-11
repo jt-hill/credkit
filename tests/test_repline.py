@@ -9,7 +9,12 @@ from credkit.behavior import DefaultCurve, PrepaymentCurve
 from credkit.cashflow import FlatDiscountCurve
 from credkit.instruments import Loan
 from credkit.instruments.amortization import AmortizationType
-from credkit.portfolio import Portfolio, PortfolioPosition, RepLine, StratificationCriteria
+from credkit.portfolio import (
+    Portfolio,
+    PortfolioPosition,
+    RepLine,
+    StratificationCriteria,
+)
 from credkit.temporal import Period
 
 
@@ -551,7 +556,9 @@ class TestRepLineAnalytics:
             loan_count=5,
         )
 
-        curve = FlatDiscountCurve(rate=InterestRate(0.05), valuation_date=date(2024, 1, 1))
+        curve = FlatDiscountCurve(
+            rate=InterestRate(0.05), valuation_date=date(2024, 1, 1)
+        )
 
         # Duration should be same as loan since it's scale-independent
         rep_dur = rep.duration(curve, modified=True)
@@ -568,7 +575,9 @@ class TestRepLineAnalytics:
             loan_count=5,
         )
 
-        curve = FlatDiscountCurve(rate=InterestRate(0.05), valuation_date=date(2024, 1, 1))
+        curve = FlatDiscountCurve(
+            rate=InterestRate(0.05), valuation_date=date(2024, 1, 1)
+        )
 
         # Convexity should be same as loan since it's scale-independent
         rep_conv = rep.convexity(curve)

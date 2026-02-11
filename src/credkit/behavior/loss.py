@@ -62,10 +62,14 @@ class LossGivenDefault:
             )
 
         if not isinstance(self.recovery_lag, Period):
-            raise TypeError(f"recovery_lag must be Period, got {type(self.recovery_lag)}")
+            raise TypeError(
+                f"recovery_lag must be Period, got {type(self.recovery_lag)}"
+            )
 
         if self.recovery_lag.length < 0:
-            raise ValueError(f"recovery_lag must be non-negative, got {self.recovery_lag}")
+            raise ValueError(
+                f"recovery_lag must be non-negative, got {self.recovery_lag}"
+            )
 
     @classmethod
     def from_percent(
@@ -125,7 +129,9 @@ class LossGivenDefault:
             raise TypeError(f"recovery_rate must be float, got {type(recovery_rate)}")
 
         if recovery_rate < 0 or recovery_rate > 1:
-            raise ValueError(f"recovery_rate must be between 0 and 1, got {recovery_rate}")
+            raise ValueError(
+                f"recovery_rate must be between 0 and 1, got {recovery_rate}"
+            )
 
         severity = 1.0 - recovery_rate
 
@@ -253,7 +259,9 @@ class LossGivenDefault:
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, LossGivenDefault):
             return NotImplemented
-        return self.severity == other.severity and self.recovery_lag == other.recovery_lag
+        return (
+            self.severity == other.severity and self.recovery_lag == other.recovery_lag
+        )
 
     # String representation
 

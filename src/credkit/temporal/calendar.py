@@ -49,7 +49,9 @@ class BusinessDayCalendar:
 
     name: str = "NO_HOLIDAYS"
     holidays: Set[date] = field(default_factory=set)
-    weekend_days: Set[int] = field(default_factory=lambda: {5, 6})  # Saturday=5, Sunday=6
+    weekend_days: Set[int] = field(
+        default_factory=lambda: {5, 6}
+    )  # Saturday=5, Sunday=6
 
     def is_business_day(self, d: date) -> bool:
         """

@@ -95,7 +95,6 @@ class TestInterestRate:
         assert rate_annual.to_percent() > 5.0
 
 
-
 class TestSpread:
     """Test cases for Spread class."""
 
@@ -139,4 +138,3 @@ class TestSpread:
         # Should be 7.5%
         assert abs(adjusted_rate.to_percent() - 7.5) < 0.0001
         assert adjusted_rate.compounding == base_rate.compounding
-

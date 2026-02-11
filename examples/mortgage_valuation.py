@@ -59,7 +59,9 @@ print(f"Monthly Payment:  {monthly_payment}")
 print(f"\nOver 30 years:")
 print(f"  Total Payments: {total_payments}")
 print(f"  Total Interest: {total_interest}")
-print(f"  Interest as % of Principal: {total_interest.ratio(loan.principal) * 100:.1f}%")
+print(
+    f"  Interest as % of Principal: {total_interest.ratio(loan.principal) * 100:.1f}%"
+)
 
 # %% [markdown]
 """
@@ -122,7 +124,9 @@ To value a loan, we discount its future cash flows using a market interest rate.
 
 # %% Value at market rate
 market_rate = InterestRate(0.055)
-discount_curve = FlatDiscountCurve.from_rate(market_rate, valuation_date=date(2024, 1, 1))
+discount_curve = FlatDiscountCurve.from_rate(
+    market_rate, valuation_date=date(2024, 1, 1)
+)
 npv = schedule.present_value(discount_curve)
 
 print(f"Loan Principal:    {loan.principal}")
@@ -194,7 +198,9 @@ rate below the loan rate:
 """
 
 # %% NPV by PSA speed
-discount_curve = FlatDiscountCurve.from_rate(InterestRate(0.055), valuation_date=date(2024, 1, 1))
+discount_curve = FlatDiscountCurve.from_rate(
+    InterestRate(0.055), valuation_date=date(2024, 1, 1)
+)
 
 base_schedule = loan.generate_schedule()
 base_npv = base_schedule.present_value(discount_curve)
@@ -260,7 +266,9 @@ print(f"  PV at {base_rate - rate_shock}%: {pv_down}")
 print(f"  PV at {base_rate}%:     {pv_base}")
 print(f"  PV at {base_rate + rate_shock}%: {pv_up}")
 print(f"\n  Effective Duration: {duration:.2f} years")
-print(f"\n  Interpretation: A 1% rate increase would decrease value by ~{duration:.1f}%")
+print(
+    f"\n  Interpretation: A 1% rate increase would decrease value by ~{duration:.1f}%"
+)
 
 # %% [markdown]
 """

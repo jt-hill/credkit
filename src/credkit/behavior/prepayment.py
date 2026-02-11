@@ -39,7 +39,9 @@ class PrepaymentRate:
             raise TypeError(f"annual_rate must be float, got {type(self.annual_rate)}")
 
         if self.annual_rate < 0:
-            raise ValueError(f"annual_rate must be non-negative, got {self.annual_rate}")
+            raise ValueError(
+                f"annual_rate must be non-negative, got {self.annual_rate}"
+            )
 
         if self.annual_rate > 1:
             raise ValueError(
@@ -107,7 +109,7 @@ class PrepaymentRate:
         survival_annual = 1.0 - self.annual_rate
 
         # (1 - CPR)^(1/12)
-        survival_monthly = survival_annual ** one_twelfth
+        survival_monthly = survival_annual**one_twelfth
 
         # SMM = 1 - survival_monthly
         smm = 1.0 - survival_monthly
@@ -140,7 +142,7 @@ class PrepaymentRate:
 
         # CPR = 1 - (1 - SMM)^12
         survival_monthly = 1.0 - smm
-        survival_annual = survival_monthly ** 12.0
+        survival_annual = survival_monthly**12.0
         cpr = 1.0 - survival_annual
 
         return cls(annual_rate=cpr)
@@ -403,10 +405,7 @@ class PrepaymentCurve:
             >>> psa_100 = PrepaymentCurve.psa_model(100.0)
             >>> psa_50 = psa_100.scale(0.5)
         """
-        scaled_rates = [
-            (month, rate * factor)
-            for month, rate in self.rates_by_month
-        ]
+        scaled_rates = [(month, rate * factor) for month, rate in self.rates_by_month]
         return PrepaymentCurve(rates_by_month=tuple(scaled_rates))
 
     # String representation

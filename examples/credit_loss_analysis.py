@@ -238,7 +238,9 @@ print(f"{'Default only (vintage)':<25} {default_only.total_amount()}")
 print(f"{'Combined (both)':<25} {combined.total_amount()}")
 
 # %% Value each scenario
-discount_curve = FlatDiscountCurve.from_rate(InterestRate(0.06), valuation_date=date(2024, 1, 1))
+discount_curve = FlatDiscountCurve.from_rate(
+    InterestRate(0.06), valuation_date=date(2024, 1, 1)
+)
 
 base_npv = schedule.present_value(discount_curve)
 prepay_npv = prepay_only.present_value(discount_curve)
@@ -266,7 +268,9 @@ This is essential for:
 """
 
 # %% CDR sensitivity
-discount_curve = FlatDiscountCurve.from_rate(InterestRate(0.06), valuation_date=date(2024, 1, 1))
+discount_curve = FlatDiscountCurve.from_rate(
+    InterestRate(0.06), valuation_date=date(2024, 1, 1)
+)
 base_npv = schedule.present_value(discount_curve)
 
 print("NPV Sensitivity to Default Rate (CDR):")

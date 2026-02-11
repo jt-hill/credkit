@@ -72,7 +72,6 @@ class TestCalculateLevelPayment:
         assert abs(payment.amount - expected) < 0.01
 
 
-
 class TestGeneratePaymentDates:
     """Tests for payment date generation."""
 
@@ -281,7 +280,6 @@ class TestInterestOnlySchedule:
         assert len(schedule) == 2
 
 
-
 class TestBulletSchedule:
     """Tests for bullet schedule generation."""
 
@@ -344,8 +342,6 @@ class TestLoanCreation:
         assert loan.amortization_type == AmortizationType.LEVEL_PAYMENT
         assert loan.payment_frequency == PaymentFrequency.MONTHLY
         assert loan.term == Period.from_string("30Y")
-
-
 
 
 class TestLoanCalculations:
@@ -437,8 +433,6 @@ class TestLoanScheduleGeneration:
 
 class TestLoanEdgeCases:
     """Tests for edge cases and special scenarios."""
-
-
 
 
 class TestReamortizeLoan:
@@ -539,7 +533,9 @@ class TestReamortizeLoan:
 
         # Interest should decline over time
         interest_flows = schedule.filter_by_type(CashFlowType.INTEREST)
-        assert interest_flows.cash_flows[0].amount > interest_flows.cash_flows[-1].amount
+        assert (
+            interest_flows.cash_flows[0].amount > interest_flows.cash_flows[-1].amount
+        )
 
     def test_reamortize_interest_only(self):
         """Test re-amortization for interest-only loan."""
@@ -692,7 +688,9 @@ class TestLoanAnalytics:
             origination_date=date(2025, 1, 1),
         )
 
-        curve = FlatDiscountCurve(InterestRate.from_percent(10.0), loan.origination_date)
+        curve = FlatDiscountCurve(
+            InterestRate.from_percent(10.0), loan.origination_date
+        )
 
         # Modified duration (default)
         mod_dur = loan.duration(curve)
@@ -712,7 +710,9 @@ class TestLoanAnalytics:
             origination_date=date(2025, 1, 1),
         )
 
-        curve = FlatDiscountCurve(InterestRate.from_percent(10.0), loan.origination_date)
+        curve = FlatDiscountCurve(
+            InterestRate.from_percent(10.0), loan.origination_date
+        )
 
         mac_dur = loan.duration(curve, modified=False)
         mod_dur = loan.duration(curve, modified=True)
@@ -731,7 +731,9 @@ class TestLoanAnalytics:
             origination_date=date(2025, 1, 1),
         )
 
-        curve = FlatDiscountCurve(InterestRate.from_percent(10.0), loan.origination_date)
+        curve = FlatDiscountCurve(
+            InterestRate.from_percent(10.0), loan.origination_date
+        )
 
         conv = loan.convexity(curve)
 
@@ -750,7 +752,9 @@ class TestLoanAnalytics:
             origination_date=date(2025, 1, 1),
         )
 
-        curve = FlatDiscountCurve(InterestRate.from_percent(10.0), loan.origination_date)
+        curve = FlatDiscountCurve(
+            InterestRate.from_percent(10.0), loan.origination_date
+        )
         prep_curve = PrepaymentCurve.constant_cpr(0.10)
         default_curve = DefaultCurve.constant_cdr(0.02)
 

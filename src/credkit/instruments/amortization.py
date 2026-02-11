@@ -110,7 +110,7 @@ def calculate_level_payment(
 
     # PMT = P * [r(1+r)^n] / [(1+r)^n - 1]
     one_plus_r = 1.0 + periodic_rate
-    factor = one_plus_r ** num_payments
+    factor = one_plus_r**num_payments
     numerator = periodic_rate * factor
     denominator = factor - 1.0
 
@@ -228,7 +228,7 @@ def generate_level_payment_schedule(
                 date=payment_date,
                 amount=interest,
                 type=CashFlowType.INTEREST,
-                description=f"Payment {i+1}/{num_payments} - Interest"
+                description=f"Payment {i + 1}/{num_payments} - Interest",
             )
         )
 
@@ -237,7 +237,7 @@ def generate_level_payment_schedule(
                 date=payment_date,
                 amount=principal_payment,
                 type=CashFlowType.PRINCIPAL,
-                description=f"Payment {i+1}/{num_payments} - Principal"
+                description=f"Payment {i + 1}/{num_payments} - Principal",
             )
         )
 
@@ -305,7 +305,7 @@ def generate_level_principal_schedule(
                 date=payment_date,
                 amount=interest,
                 type=CashFlowType.INTEREST,
-                description=f"Payment {i+1}/{num_payments} - Interest"
+                description=f"Payment {i + 1}/{num_payments} - Interest",
             )
         )
 
@@ -314,7 +314,7 @@ def generate_level_principal_schedule(
                 date=payment_date,
                 amount=principal_payment,
                 type=CashFlowType.PRINCIPAL,
-                description=f"Payment {i+1}/{num_payments} - Principal"
+                description=f"Payment {i + 1}/{num_payments} - Principal",
             )
         )
 
@@ -373,7 +373,7 @@ def generate_interest_only_schedule(
                 date=payment_date,
                 amount=interest,
                 type=CashFlowType.INTEREST,
-                description=f"Payment {i+1}/{num_payments} - Interest"
+                description=f"Payment {i + 1}/{num_payments} - Interest",
             )
         )
 
@@ -384,7 +384,7 @@ def generate_interest_only_schedule(
                     date=payment_date,
                     amount=principal,
                     type=CashFlowType.BALLOON,
-                    description="Balloon payment at maturity"
+                    description="Balloon payment at maturity",
                 )
             )
 
@@ -415,7 +415,7 @@ def generate_bullet_schedule(
         date=maturity_date,
         amount=principal,
         type=CashFlowType.BALLOON,
-        description="Bullet payment at maturity"
+        description="Bullet payment at maturity",
     )
 
     return CashFlowSchedule(cash_flows=(cash_flow,))
@@ -481,9 +481,7 @@ def reamortize_loan(
     # Method-specific validation
     if method == ReamortizationMethod.KEEP_MATURITY:
         if remaining_payments is None:
-            raise ValueError(
-                "remaining_payments required when method=KEEP_MATURITY"
-            )
+            raise ValueError("remaining_payments required when method=KEEP_MATURITY")
         if remaining_payments <= 0:
             raise ValueError(
                 f"remaining_payments must be positive, got {remaining_payments}"
@@ -492,9 +490,7 @@ def reamortize_loan(
 
     elif method == ReamortizationMethod.KEEP_PAYMENT:
         if target_payment is None:
-            raise ValueError(
-                "target_payment required when method=KEEP_PAYMENT"
-            )
+            raise ValueError("target_payment required when method=KEEP_PAYMENT")
         if not target_payment.is_positive():
             raise ValueError(
                 f"target_payment must be positive, got {target_payment.amount}"

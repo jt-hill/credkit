@@ -118,7 +118,10 @@ class DayCountBasis:
         while current_date.year < end_date.year:
             year_end = date(current_date.year, 12, 31)
             days_in_year = 366 if self._is_leap_year(current_date.year) else 365
-            total_fraction += self.days_between(current_date, year_end + type(year_end).resolution) / days_in_year
+            total_fraction += (
+                self.days_between(current_date, year_end + type(year_end).resolution)
+                / days_in_year
+            )
             current_date = date(current_date.year + 1, 1, 1)
 
         # Add remaining fraction in final year
@@ -146,7 +149,9 @@ class DayCountBasis:
             d1 = 30
 
         # Adjust d2 if end date is last day of month and start date is also last day
-        if self._is_last_day_of_month(end_date) and self._is_last_day_of_month(start_date):
+        if self._is_last_day_of_month(end_date) and self._is_last_day_of_month(
+            start_date
+        ):
             d2 = 30
 
         # Adjust d2 if > 30

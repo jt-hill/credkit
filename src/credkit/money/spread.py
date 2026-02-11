@@ -21,7 +21,9 @@ class Spread:
     def __post_init__(self) -> None:
         """Validate spread parameters."""
         if not isinstance(self.basis_points, (int, float)):
-            raise TypeError(f"basis_points must be int or float, got {type(self.basis_points)}")
+            raise TypeError(
+                f"basis_points must be int or float, got {type(self.basis_points)}"
+            )
         if isinstance(self.basis_points, int):
             object.__setattr__(self, "basis_points", float(self.basis_points))
 
