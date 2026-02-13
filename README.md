@@ -1,4 +1,4 @@
-# credkit 0.5.1
+# credkit
 
 **An experimental open toolbox for credit modeling in Python**
 

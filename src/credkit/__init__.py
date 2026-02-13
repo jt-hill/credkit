@@ -12,6 +12,13 @@ Core modules:
 - behavior: Prepayment and default modeling
 """
 
+from importlib.metadata import version, PackageNotFoundError
+
+try:
+    __version__ = version("credkit")
+except PackageNotFoundError:
+    __version__ = "0.0.0"
+
 from .cashflow import (
     CashFlow,
     CashFlowSchedule,
@@ -58,8 +65,6 @@ from .portfolio import (
     Portfolio,
     PortfolioPosition,
 )
-
-__version__ = "0.3.0"
 
 __all__ = [
     # Money module
