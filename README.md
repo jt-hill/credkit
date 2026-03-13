@@ -1,5 +1,10 @@
 # credkit
 
+[![PyPI version](https://img.shields.io/pypi/v/credkit)](https://pypi.org/project/credkit/)
+[![Python 3.13+](https://img.shields.io/pypi/pyversions/credkit)](https://pypi.org/project/credkit/)
+[![License: AGPL-3.0](https://img.shields.io/pypi/l/credkit)](https://github.com/jt-hill/credkit/blob/main/LICENSE)
+[![Tests](https://img.shields.io/badge/tests-277%20passing-brightgreen)](https://github.com/jt-hill/credkit)
+
 **An experimental open toolbox for credit modeling in Python**
 
 Credkit provides elegant, type-safe primitives for building credit models that
