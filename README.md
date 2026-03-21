@@ -1,9 +1,12 @@
 # credkit
 
+[![CI](https://github.com/jt-hill/credkit/actions/workflows/ci.yml/badge.svg)](https://github.com/jt-hill/credkit/actions/workflows/ci.yml)
 [![PyPI version](https://img.shields.io/pypi/v/credkit)](https://pypi.org/project/credkit/)
+[![PyPI downloads](https://img.shields.io/pypi/dm/credkit)](https://pypi.org/project/credkit/)
 [![Python 3.13+](https://img.shields.io/pypi/pyversions/credkit)](https://pypi.org/project/credkit/)
 [![License: AGPL-3.0](https://img.shields.io/pypi/l/credkit)](https://github.com/jt-hill/credkit/blob/main/LICENSE)
-[![Tests](https://img.shields.io/badge/tests-277%20passing-brightgreen)](https://github.com/jt-hill/credkit)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![py.typed](https://img.shields.io/badge/py.typed-yes-blue)](https://peps.python.org/pep-0561/)
 
 **An experimental open toolbox for credit modeling in Python**
 
