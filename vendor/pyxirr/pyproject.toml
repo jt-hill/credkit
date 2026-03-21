@@ -1,0 +1,47 @@
+[project]
+name = "pyxirr"
+description-content-type = "text/markdown; charset=UTF-8; variant=GFM"
+requires-python = ">=3.7"
+dynamic = ["version"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Topic :: Office/Business :: Financial",
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "License :: OSI Approved :: The Unlicense (Unlicense)",
+]
+
+[build-system]
+requires = ["maturin>=1,<2"]
+build-backend = "maturin"
+
+[tool.maturin]
+python-source = "python"
+module-name = "pyxirr._pyxirr"
+features = ["extension"]
+strip = true
+include = [
+    { path = "pyproject.toml", format = ["sdist", "wheel"] },
+    { path = "Cargo.toml", format = "sdist" },
+    { path = "Cargo.lock", format = "sdist" },
+    { path = ".cargo/*", format = "sdist" },
+    { path = "docs", format = "sdist" },
+]
+
+[tool.black]
+line-length = 79
+target-version = ["py311"]
+
+[tool.isort]
+profile = "black"
+atomic = true
+line_length = 79
+lines_after_imports = 2
