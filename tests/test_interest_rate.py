@@ -1,7 +1,5 @@
 """Tests for InterestRate class."""
 
-import pytest
-
 from credkit.money import InterestRate, CompoundingConvention, Spread
 
 

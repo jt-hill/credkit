@@ -297,7 +297,8 @@ cdr_values = [0.0, 2.0, 4.0]
 cpr_values = [0.0, 10.0, 20.0]
 
 # Header
-header = f"{'CDR \\ CPR':<12}"
+label = "CDR \\ CPR"
+header = f"{label:<12}"
 for cpr in cpr_values:
     header += f"{cpr:.0f}%{'':<15}"
 print(header)

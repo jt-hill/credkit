@@ -13,7 +13,7 @@ from credkit.cashflow import (
     ZeroCurve,
 )
 from credkit.money import InterestRate, Money, USD
-from credkit.temporal import DayCountBasis, DayCountConvention, PaymentFrequency
+from credkit.temporal import PaymentFrequency
 
 
 class TestCashFlow:
@@ -257,7 +257,6 @@ class TestCashFlowSchedule:
 
     def test_currency_validation(self):
         """Test that all cash flows must have same currency."""
-        from credkit.money import Currency
 
         cf1 = CashFlow(
             date(2025, 1, 1), Money.from_float(1000, USD), CashFlowType.PRINCIPAL

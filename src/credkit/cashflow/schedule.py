@@ -9,7 +9,7 @@ import pyxirr
 
 from ..money import Money
 from ..money.rate import CompoundingConvention
-from ..temporal import DayCountBasis, DayCountConvention, PaymentFrequency, Period
+from ..temporal import DayCountBasis, DayCountConvention, PaymentFrequency
 from .cashflow import CashFlow, CashFlowType
 from .discount import DiscountCurve, FlatDiscountCurve, ZeroCurve
 
@@ -65,7 +65,7 @@ class CashFlowSchedule:
         return cls(cash_flows=tuple(cash_flows))
 
     @classmethod
-    def empty(cls, currency: "Currency" = None) -> Self:  # type: ignore
+    def empty(cls, currency: "Money" = None) -> Self:  # type: ignore
         """
         Create an empty schedule.
 
@@ -215,7 +215,6 @@ class CashFlowSchedule:
             return self
 
         # Group by (period_start_date, type)
-        from collections import defaultdict
 
         period_groups: dict[tuple[date, CashFlowType], list[CashFlow]] = defaultdict(
             list

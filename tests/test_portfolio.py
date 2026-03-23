@@ -4,9 +4,9 @@ from datetime import date
 
 import pytest
 
-from credkit import InterestRate, Money, PaymentFrequency
+from credkit import InterestRate, Money
 from credkit.behavior import DefaultCurve, PrepaymentCurve
-from credkit.cashflow import CashFlowType, FlatDiscountCurve
+from credkit.cashflow import FlatDiscountCurve
 from credkit.instruments import Loan
 from credkit.portfolio import Portfolio, PortfolioPosition
 

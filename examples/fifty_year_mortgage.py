@@ -51,7 +51,7 @@ loan_50 = Loan.mortgage(
 
 print(f"Principal: {principal}")
 print(f"Rate: {rate:.2f}")
-print(f"Terms: 30 years vs 50 years")
+print("Terms: 30 years vs 50 years")
 
 # %% [markdown]
 """
@@ -79,9 +79,9 @@ print(f"The reality: {pct_reduction:.1f}% reduction for 67% longer term")
 # %% What does the savings buy?
 print("\nWhat does that 'savings' buy you?")
 print(f"  - {monthly_savings.amount / 30:.2f} lattes per day")
-print(f"  - One nice dinner out per month")
-print(f"  - A streaming subscription... or three")
-print(f"  - 20 extra years of mortgage payments")
+print("  - One nice dinner out per month")
+print("  - A streaming subscription... or three")
+print("  - 20 extra years of mortgage payments")
 
 # %% [markdown]
 """
@@ -119,10 +119,10 @@ print(
 
 # %% The extra interest in perspective
 print(f"\nExtra interest for 50-year term: {extra_interest}")
-print(f"\nTo put that in perspective:")
+print("\nTo put that in perspective:")
 print(f"  - That's {extra_interest.ratio(principal) * 100:.0f}% of your home's value")
-print(f"  - You could buy another house with that money")
-print(f"  - Or fund a comfortable retirement")
+print("  - You could buy another house with that money")
+print("  - Or fund a comfortable retirement")
 
 # %% [markdown]
 """
@@ -172,7 +172,7 @@ balance_50_10yr = schedule_50.balance_at(as_of_10yr)
 equity_30_10yr = principal - balance_30_10yr
 equity_50_10yr = principal - balance_50_10yr
 
-print(f"\nAfter 10 years:")
+print("\nAfter 10 years:")
 print(f"  30-year mortgage equity: {equity_30_10yr}")
 print(f"  50-year mortgage equity: {equity_50_10yr}")
 print(f"  Equity gap: {equity_30_10yr - equity_50_10yr}")
@@ -242,7 +242,7 @@ for month in range(1, 601):
     if months_to_10pct_30 and months_to_10pct_50:
         break
 
-print(f"\nTime to reach 10% equity (minimum to sell without bringing cash):")
+print("\nTime to reach 10% equity (minimum to sell without bringing cash):")
 print(
     f"  30-year mortgage: {months_to_10pct_30} months ({months_to_10pct_30 / 12:.1f} years)"
 )
@@ -319,8 +319,8 @@ print(
     f"{str(interest_50[month_120_idx].amount):<20}"
 )
 
-print(f"\nAt year 10, the 30-year borrower is paying down principal faster.")
-print(f"The 50-year borrower is still mostly paying interest - for 28 more years.")
+print("\nAt year 10, the 30-year borrower is paying down principal faster.")
+print("The 50-year borrower is still mostly paying interest - for 28 more years.")
 
 # %% [markdown]
 """
@@ -336,7 +336,7 @@ annual_return = 0.07  # 7% average market return
 monthly_return = (1 + annual_return) ** (1 / 12) - 1
 
 print(f"The argument: 'I'll take the 50-year and invest the {monthly_savings} savings'")
-print(f"Assumption: 7% annual return (historical stock market average)")
+print("Assumption: 7% annual return (historical stock market average)")
 
 # %% Investment value over time
 print("\nInvestment value vs remaining mortgage balance:")

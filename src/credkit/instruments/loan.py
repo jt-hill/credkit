@@ -296,14 +296,16 @@ class Loan:
     #: Fields that must be present in a dict passed to ``from_dict()``.
     #: Optional fields (currency, compounding, day_count, first_payment_date)
     #: fall back to defaults when missing or null.
-    REQUIRED_DICT_FIELDS: frozenset[str] = frozenset({
-        "principal",
-        "annual_rate",
-        "term",
-        "payment_frequency",
-        "amortization_type",
-        "origination_date",
-    })
+    REQUIRED_DICT_FIELDS: frozenset[str] = frozenset(
+        {
+            "principal",
+            "annual_rate",
+            "term",
+            "payment_frequency",
+            "amortization_type",
+            "origination_date",
+        }
+    )
 
     def to_dict(self) -> dict[str, Any]:
         """Convert this Loan to a flat dict suitable for a DataFrame row.
@@ -363,9 +365,7 @@ class Loan:
         """
         missing = cls.REQUIRED_DICT_FIELDS - row.keys()
         if missing:
-            raise ValueError(
-                f"Missing required fields for Loan: {sorted(missing)}"
-            )
+            raise ValueError(f"Missing required fields for Loan: {sorted(missing)}")
 
         try:
             # Currency

@@ -40,6 +40,9 @@ workspace = { members = ["vendor/pyxirr"] }
 [tool.uv.sources]
 pyxirr = { workspace = true }
 
+[tool.ruff]
+exclude = ["vendor"]
+
 [tool.pyright]
 venvPath = "."
 venv = ".venv"

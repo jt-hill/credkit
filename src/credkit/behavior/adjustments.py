@@ -109,8 +109,6 @@ def apply_prepayment_scenario(
         ... )
     """
     from ..instruments.amortization import ReamortizationMethod, reamortize_loan
-    from ..temporal import PaymentFrequency
-    from ..instruments import AmortizationType
 
     if prepayment_amount.is_negative():
         raise ValueError(
@@ -231,8 +229,6 @@ def apply_prepayment_curve(
         ... )
     """
     from ..instruments.amortization import reamortize_loan, ReamortizationMethod
-    from ..temporal import PaymentFrequency
-    from ..instruments import AmortizationType
 
     if total_payments <= 0:
         return CashFlowSchedule.from_list([], sort=False)
@@ -242,10 +238,6 @@ def apply_prepayment_curve(
     current_date = start_date
     month = 1
     remaining_payments = total_payments
-
-    # Calculate periodic rate
-    periods_per_year = float(payment_frequency.payments_per_year)
-    periodic_rate = annual_rate / periods_per_year if periods_per_year > 0 else 0.0
 
     while remaining_payments > 0 and current_balance > Money.zero(
         starting_balance.currency

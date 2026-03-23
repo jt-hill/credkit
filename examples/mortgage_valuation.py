@@ -56,7 +56,7 @@ total_payments = loan.total_payments()
 total_interest = loan.total_interest()
 
 print(f"Monthly Payment:  {monthly_payment}")
-print(f"\nOver 30 years:")
+print("\nOver 30 years:")
 print(f"  Total Payments: {total_payments}")
 print(f"  Total Interest: {total_interest}")
 print(
@@ -180,7 +180,7 @@ expected = loan.expected_cashflows(prepayment_curve=psa_100)
 prepayment_flows = expected.filter_by_type(CashFlowType.PREPAYMENT)
 principal_exp = expected.get_principal_flows()
 
-print(f"Expected cash flows under 100% PSA:")
+print("Expected cash flows under 100% PSA:")
 print(f"  Total flows:      {len(expected)}")
 print(f"  Prepayment flows: {len(prepayment_flows)}")
 print(f"\nTotal prepayments over life: {prepayment_flows.total_amount()}")

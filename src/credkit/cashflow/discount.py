@@ -8,6 +8,7 @@ from enum import Enum
 from typing import Self
 
 from ..money import InterestRate
+from ..money.rate import CompoundingConvention
 from ..temporal import DayCountBasis, DayCountConvention
 
 
@@ -233,7 +234,7 @@ class ZeroCurve(DiscountCurve):
         # Validate chronological order
         for i in range(len(self.points) - 1):
             if self.points[i][0] >= self.points[i + 1][0]:
-                raise ValueError(f"Points must be in chronological order")
+                raise ValueError("Points must be in chronological order")
 
         # Validate all points are after valuation date
         if self.points[0][0] <= self.valuation_date:

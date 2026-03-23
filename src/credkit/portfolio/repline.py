@@ -347,10 +347,12 @@ class RepLine:
 
     #: Fields required beyond Loan.REQUIRED_DICT_FIELDS for ``from_dict()``.
     #: Stratification fields are always optional.
-    REQUIRED_DICT_FIELDS: frozenset[str] = Loan.REQUIRED_DICT_FIELDS | frozenset({
-        "total_balance",
-        "loan_count",
-    })
+    REQUIRED_DICT_FIELDS: frozenset[str] = Loan.REQUIRED_DICT_FIELDS | frozenset(
+        {
+            "total_balance",
+            "loan_count",
+        }
+    )
 
     def to_dict(self) -> dict[str, Any]:
         """Convert this RepLine to a flat dict suitable for a DataFrame row.
@@ -406,9 +408,7 @@ class RepLine:
         """
         missing = cls.REQUIRED_DICT_FIELDS - row.keys()
         if missing:
-            raise ValueError(
-                f"Missing required fields for RepLine: {sorted(missing)}"
-            )
+            raise ValueError(f"Missing required fields for RepLine: {sorted(missing)}")
 
         try:
             loan = Loan.from_dict(

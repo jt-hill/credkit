@@ -367,7 +367,7 @@ class TestScheduleAdjustments:
 
     def test_apply_prepayment_curve(self, simple_loan):
         """Test applying prepayment curve with re-amortization."""
-        base_schedule = simple_loan.generate_schedule()
+        simple_loan.generate_schedule()
         curve = PrepaymentCurve.constant_cpr(0.10)
 
         first_payment_date = (

@@ -1,7 +1,5 @@
 """Tests for Money class."""
 
-import pytest
-
 from credkit.money import Money, USD
 
 
